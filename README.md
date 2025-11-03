@@ -1,3 +1,18 @@
+an entirely vibecoded discord bot platform!
+im planning on keeping this updated and adding new features
+at the moment there is no plugin marketplace but its very early days 
+all contributions welcome and appreciated (especially gui imrovments lol)
+
+
+
+
+
+
+
+
+
+
+
 # 🤖 Discord LLM Bot
 
 A powerful Discord bot powered by Large Language Models with a modern GUI dashboard and extensive customization options.

@@ -13,7 +13,7 @@ all contributions welcome and appreciated (especially gui imrovments lol)
 
 
 
-# 🤖 Discord LLM Bot
+# 🤖 OpenLLM
 
 OpenLLM — a powerful Discord assistant platform powered by Large Language Models with a modern GUI dashboard and extensive customization options.
 

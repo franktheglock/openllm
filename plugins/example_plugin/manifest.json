@@ -1,0 +1,14 @@
+{
+  "name": "Example Plugin",
+  "version": "1.0.0",
+  "author": "Bot Developer",
+  "description": "An example plugin demonstrating the plugin system",
+  "permissions": ["network"],
+  "tools": [
+    {
+      "name": "example_tool",
+      "description": "An example tool that does something useful"
+    }
+  ],
+  "entry_point": "plugin.py"
+}

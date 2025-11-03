@@ -1,0 +1,17 @@
+{
+  "name": "Calculator",
+  "version": "1.0.0",
+  "author": "BotDevs",
+  "description": "Perform basic math calculations. Supports addition, subtraction, multiplication, division, and more complex expressions.",
+  "icon": "🧮",
+  "category": "utility",
+  "tags": ["math", "calculator", "utility"],
+  "permissions": [],
+  "tools": [
+    {
+      "name": "calculate",
+      "description": "Evaluate a mathematical expression"
+    }
+  ],
+  "entry_point": "plugin.py"
+}

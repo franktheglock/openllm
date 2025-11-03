@@ -1,0 +1,17 @@
+{
+  "name": "UUID Generator",
+  "version": "1.0.0",
+  "author": "DevTools",
+  "description": "Generate random UUIDs (Universally Unique Identifiers) in various formats. Useful for creating unique IDs for testing, development, and data generation.",
+  "icon": "🔑",
+  "category": "utility",
+  "tags": ["uuid", "id", "generator"],
+  "permissions": [],
+  "tools": [
+    {
+      "name": "generate_uuid",
+      "description": "Generate a random UUID"
+    }
+  ],
+  "entry_point": "plugin.py"
+}

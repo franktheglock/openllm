@@ -1,0 +1,680 @@
+"""
+Flask web dashboard for bot configuration and monitoring.
+"""
+from flask import Flask, render_template, jsonify, request
+from flask_cors import CORS
+import sqlite3
+from datetime import datetime, timedelta
+from typing import Optional
+
+from src.config.manager import ConfigManager
+
+
+def create_app(config_manager: Optional[ConfigManager] = None, bot = None):
+    """
+    Create and configure the Flask app.
+    
+    Args:
+        config_manager: Configuration manager instance
+        bot: Discord bot instance
+    
+    Returns:
+        Flask app
+    """
+    app = Flask(__name__)
+    app.config['SECRET_KEY'] = 'dev-secret-key-change-in-production'
+    CORS(app)
+    
+    # Store references
+    app.config_manager = config_manager or ConfigManager()
+    app.bot = bot
+    
+    @app.route('/')
+    def index():
+        """Dashboard home page."""
+        return render_template('index.html')
+    
+    @app.route('/marketplace')
+    def marketplace():
+        """Plugin marketplace page."""
+        return render_template('marketplace.html')
+    
+    @app.route('/api/status')
+    def api_status():
+        """Get bot status."""
+        status = {
+            'online': app.bot is not None and app.bot.bot.is_ready() if app.bot else False,
+            'servers': len(app.bot.bot.guilds) if app.bot and app.bot.bot.is_ready() else 0,
+            'uptime': 'N/A'  # TODO: Track uptime
+        }
+        return jsonify(status)
+    
+    @app.route('/api/config')
+    def api_config():
+        """Get current configuration."""
+        return jsonify(app.config_manager.config)
+    
+    @app.route('/api/config', methods=['POST'])
+    def api_update_config():
+        """Update configuration."""
+        try:
+            data = request.json
+            
+            # Update configuration
+            for key, value in data.items():
+                app.config_manager.set(key, value)
+            
+            # Reload bot configuration if bot is running
+            if app.bot:
+                app.bot._load_tools()
+            
+            return jsonify({'success': True, 'message': 'Configuration updated successfully'})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+    
+    @app.route('/api/servers')
+    def api_servers():
+        """Get list of connected servers."""
+        if not app.bot or not app.bot.bot.is_ready():
+            return jsonify([])
+        
+        servers = []
+        for guild in app.bot.bot.guilds:
+            server_config = app.config_manager.get_server_config(str(guild.id))
+            servers.append({
+                'id': str(guild.id),
+                'name': guild.name,
+                'member_count': guild.member_count,
+                'llm_provider': server_config.get('llm_provider'),
+                'llm_model': server_config.get('llm_model')
+            })
+        
+        return jsonify(servers)
+    
+    @app.route('/api/servers/<server_id>/config', methods=['GET', 'POST'])
+    def api_server_config(server_id):
+        """Get or update server-specific configuration."""
+        if request.method == 'GET':
+            config = app.config_manager.get_server_config(server_id)
+            return jsonify(config)
+        else:
+            config = request.json
+            app.config_manager.set_server_config(server_id, config)
+            return jsonify({'success': True})
+    
+    @app.route('/api/usage/stats')
+    def api_usage_stats():
+        """Get usage statistics."""
+        days = request.args.get('days', 7, type=int)
+        
+        with sqlite3.connect(app.config_manager.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Total usage
+            cursor.execute("""
+                SELECT 
+                    COUNT(*) as requests,
+                    SUM(tokens_used) as total_tokens,
+                    SUM(cost_usd) as total_cost
+                FROM usage_stats
+                WHERE timestamp > datetime('now', '-' || ? || ' days')
+            """, (days,))
+            
+            row = cursor.fetchone()
+            total_stats = {
+                'requests': row[0] or 0,
+                'tokens': row[1] or 0,
+                'cost': row[2] or 0.0
+            }
+            
+            # Per-provider stats
+            cursor.execute("""
+                SELECT 
+                    provider,
+                    COUNT(*) as requests,
+                    SUM(tokens_used) as tokens,
+                    SUM(cost_usd) as cost
+                FROM usage_stats
+                WHERE timestamp > datetime('now', '-' || ? || ' days')
+                GROUP BY provider
+            """, (days,))
+            
+            provider_stats = []
+            for row in cursor.fetchall():
+                provider_stats.append({
+                    'provider': row[0],
+                    'requests': row[1],
+                    'tokens': row[2],
+                    'cost': row[3]
+                })
+            
+            # Daily breakdown
+            cursor.execute("""
+                SELECT 
+                    DATE(timestamp) as date,
+                    COUNT(*) as requests,
+                    SUM(tokens_used) as tokens,
+                    SUM(cost_usd) as cost
+                FROM usage_stats
+                WHERE timestamp > datetime('now', '-' || ? || ' days')
+                GROUP BY DATE(timestamp)
+                ORDER BY date
+            """, (days,))
+            
+            daily_stats = []
+            for row in cursor.fetchall():
+                daily_stats.append({
+                    'date': row[0],
+                    'requests': row[1],
+                    'tokens': row[2],
+                    'cost': row[3]
+                })
+        
+        return jsonify({
+            'total': total_stats,
+            'by_provider': provider_stats,
+            'daily': daily_stats
+        })
+    
+    @app.route('/api/tools')
+    def api_tools():
+        """Get available tools."""
+        if not app.bot:
+            return jsonify([])
+        
+        tools = []
+        for name, tool in app.bot.tools.items():
+            definition = tool.get_definition()
+            tools.append({
+                'name': definition.name,
+                'description': definition.description,
+                'enabled': True
+            })
+        
+        return jsonify(tools)
+    
+    @app.route('/api/plugins')
+    def api_plugins():
+        """Get installed plugins."""
+        with sqlite3.connect(app.config_manager.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT name, version, enabled FROM plugins")
+            
+            plugins = []
+            for row in cursor.fetchall():
+                plugins.append({
+                    'name': row[0],
+                    'version': row[1],
+                    'enabled': bool(row[2])
+                })
+        
+        return jsonify(plugins)
+    
+    @app.route('/api/providers')
+    def api_providers():
+        """Get available LLM providers and models."""
+        from src.llm.factory import LLMProviderFactory
+        import asyncio
+        
+        providers = []
+        provider_info = {
+            'gemini': {
+                'name': 'Google Gemini',
+                'description': 'Fast, affordable, and powerful',
+                'recommended': True
+            },
+            'openai': {
+                'name': 'OpenAI',
+                'description': 'GPT-4 and GPT-3.5 models',
+                'recommended': False
+            },
+            'anthropic': {
+                'name': 'Anthropic',
+                'description': 'Claude 3 family',
+                'recommended': False
+            },
+            'ollama': {
+                'name': 'Ollama',
+                'description': 'Local models (free)',
+                'recommended': False
+            },
+            'openrouter': {
+                'name': 'OpenRouter',
+                'description': 'Access to multiple providers',
+                'recommended': False
+            }
+        }
+        
+        for provider_name in LLMProviderFactory.get_available_providers():
+            try:
+                # Try to create provider to get available models
+                provider = LLMProviderFactory.create_provider(provider_name)
+                
+                # For OpenRouter, try to fetch models from API
+                if provider_name == 'openrouter' and hasattr(provider, 'fetch_models_from_api'):
+                    try:
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        models = loop.run_until_complete(provider.fetch_models_from_api())
+                        loop.close()
+                    except:
+                        models = provider.get_available_models()
+                else:
+                    models = provider.get_available_models()
+                
+                info = provider_info.get(provider_name, {})
+                
+                providers.append({
+                    'name': provider_name,
+                    'display_name': info.get('name', provider_name.title()),
+                    'description': info.get('description', ''),
+                    'recommended': info.get('recommended', False),
+                    'models': models,
+                    'available': True
+                })
+            except:
+                info = provider_info.get(provider_name, {})
+                providers.append({
+                    'name': provider_name,
+                    'display_name': info.get('name', provider_name.title()),
+                    'description': info.get('description', ''),
+                    'recommended': info.get('recommended', False),
+                    'models': [],
+                    'available': False
+                })
+        
+        return jsonify(providers)
+    
+    @app.route('/api/config/llm', methods=['POST'])
+    def api_update_llm_config():
+        """Update LLM configuration."""
+        try:
+            data = request.json
+            
+            if 'provider' in data:
+                app.config_manager.set('llm.default_provider', data['provider'])
+            
+            if 'model' in data:
+                app.config_manager.set('llm.default_model', data['model'])
+            
+            if 'temperature' in data:
+                app.config_manager.set('llm.temperature', float(data['temperature']))
+            
+            if 'max_tokens' in data:
+                app.config_manager.set('llm.max_tokens', int(data['max_tokens']))
+            
+            return jsonify({'success': True, 'message': 'LLM configuration updated'})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+    
+    @app.route('/api/logs')
+    def api_logs():
+        """Get recent bot logs."""
+        import os
+        from pathlib import Path
+        
+        log_file = Path('logs/bot.log')
+        if not log_file.exists():
+            return jsonify({'logs': []})
+        
+        # Read last 500 lines
+        try:
+            with open(log_file, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+                recent_lines = lines[-500:] if len(lines) > 500 else lines
+                return jsonify({'logs': [line.strip() for line in recent_lines]})
+        except Exception as e:
+            return jsonify({'logs': [], 'error': str(e)})
+    
+    @app.route('/api/tool_calls')
+    def api_tool_calls():
+        """Get recent tool calls with parameters."""
+        limit = request.args.get('limit', 100, type=int)
+        
+        with sqlite3.connect(app.config_manager.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, server_id, user_id, tool_name, parameters, result, 
+                       success, error_message, timestamp
+                FROM tool_calls
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """, (limit,))
+            
+            tool_calls = []
+            for row in cursor.fetchall():
+                import json
+                tool_calls.append({
+                    'id': row[0],
+                    'server_id': row[1],
+                    'user_id': row[2],
+                    'tool_name': row[3],
+                    'parameters': json.loads(row[4]) if row[4] else {},
+                    'result': row[5],
+                    'success': bool(row[6]),
+                    'error_message': row[7],
+                    'timestamp': row[8]
+                })
+        
+        return jsonify(tool_calls)
+    
+    @app.route('/api/marketplace/plugins')
+    def api_marketplace_plugins():
+        """Get available plugins from marketplace."""
+        import os
+        import json
+        from pathlib import Path
+        
+        plugins_dir = Path('plugins')
+        available_plugins = []
+        
+        # Scan plugins directory
+        if plugins_dir.exists():
+            for plugin_dir in plugins_dir.iterdir():
+                if plugin_dir.is_dir():
+                    manifest_path = plugin_dir / 'manifest.json'
+                    if manifest_path.exists():
+                        try:
+                            with open(manifest_path, 'r', encoding='utf-8') as f:
+                                manifest = json.load(f)
+                                
+                                # Check if plugin is installed
+                                installed = False
+                                with sqlite3.connect(app.config_manager.db_path) as conn:
+                                    cursor = conn.cursor()
+                                    cursor.execute("SELECT 1 FROM plugins WHERE name = ?", (manifest['name'],))
+                                    installed = cursor.fetchone() is not None
+                                
+                                available_plugins.append({
+                                    'id': plugin_dir.name,
+                                    'name': manifest.get('name', plugin_dir.name),
+                                    'version': manifest.get('version', '1.0.0'),
+                                    'author': manifest.get('author', 'Unknown'),
+                                    'description': manifest.get('description', ''),
+                                    'icon': manifest.get('icon', '🔌'),
+                                    'category': manifest.get('category', 'utility'),
+                                    'tags': manifest.get('tags', []),
+                                    'installed': installed,
+                                    'builtin': manifest.get('builtin', False),
+                                    'tools': manifest.get('tools', [])
+                                })
+                        except Exception as e:
+                            print(f"Error loading plugin {plugin_dir.name}: {e}")
+        
+        return jsonify(available_plugins)
+    
+    @app.route('/api/marketplace/install/<plugin_id>', methods=['POST'])
+    def api_install_plugin(plugin_id):
+        """Install a plugin."""
+        import json
+        from pathlib import Path
+        import importlib.util
+        
+        try:
+            plugins_dir = Path('plugins')
+            plugin_dir = plugins_dir / plugin_id
+            
+            if not plugin_dir.exists():
+                return jsonify({'success': False, 'error': 'Plugin not found'}), 404
+            
+            manifest_path = plugin_dir / 'manifest.json'
+            if not manifest_path.exists():
+                return jsonify({'success': False, 'error': 'Plugin manifest not found'}), 404
+            
+            # Load manifest
+            with open(manifest_path, 'r', encoding='utf-8') as f:
+                manifest = json.load(f)
+            
+            # Check if already installed
+            with sqlite3.connect(app.config_manager.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT 1 FROM plugins WHERE name = ?", (manifest['name'],))
+                if cursor.fetchone():
+                    return jsonify({'success': False, 'error': 'Plugin already installed'}), 400
+                
+                # Install plugin in database
+                cursor.execute("""
+                    INSERT INTO plugins (name, version, enabled, config_json)
+                    VALUES (?, ?, 1, '{}')
+                """, (manifest['name'], manifest['version']))
+                conn.commit()
+            
+            # Reload bot tools if bot is running
+            if app.bot:
+                app.bot._load_tools()
+                
+                # Update all server configs to include the new tools
+                # Get all tool names
+                tool_names = list(app.bot.tools.keys())
+                
+                # Update each server's enabled_tools
+                with sqlite3.connect(app.config_manager.db_path) as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT server_id, enabled_tools FROM server_config")
+                    servers = cursor.fetchall()
+                    
+                    for server_id, enabled_tools in servers:
+                        # Update to include all tools
+                        cursor.execute("""
+                            UPDATE server_config 
+                            SET enabled_tools = ? 
+                            WHERE server_id = ?
+                        """, (','.join(tool_names), server_id))
+                    
+                    conn.commit()
+                
+                print(f"Updated server configs with tools: {tool_names}")
+            
+            return jsonify({
+                'success': True,
+                'message': f"Plugin '{manifest['name']}' installed successfully",
+                'plugin': {
+                    'name': manifest['name'],
+                    'version': manifest['version']
+                }
+            })
+            
+        except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"Error installing plugin: {error_details}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    @app.route('/api/marketplace/uninstall/<plugin_id>', methods=['POST'])
+    def api_uninstall_plugin(plugin_id):
+        """Uninstall a plugin."""
+        import json
+        from pathlib import Path
+        
+        try:
+            plugins_dir = Path('plugins')
+            plugin_dir = plugins_dir / plugin_id
+            
+            if not plugin_dir.exists():
+                return jsonify({'success': False, 'error': 'Plugin not found'}), 404
+            
+            manifest_path = plugin_dir / 'manifest.json'
+            if not manifest_path.exists():
+                return jsonify({'success': False, 'error': 'Plugin manifest not found'}), 404
+            
+            # Load manifest
+            with open(manifest_path, 'r', encoding='utf-8') as f:
+                manifest = json.load(f)
+            
+            # Remove from database
+            with sqlite3.connect(app.config_manager.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM plugins WHERE name = ?", (manifest['name'],))
+                conn.commit()
+            
+            # Reload bot tools if bot is running
+            if app.bot:
+                app.bot._load_tools()
+            
+            return jsonify({
+                'success': True,
+                'message': f"Plugin '{manifest['name']}' uninstalled successfully"
+            })
+            
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    @app.route('/api/tools/sync', methods=['POST'])
+    def api_sync_tools():
+        """Sync all loaded tools to all server configurations."""
+        try:
+            import json
+            
+            if not app.bot:
+                return jsonify({'success': False, 'error': 'Bot not running'}), 400
+            
+            # Get all tool names
+            tool_names = list(app.bot.tools.keys())
+            
+            # Update each server's enabled_tools
+            with sqlite3.connect(app.config_manager.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT server_id FROM server_config")
+                servers = cursor.fetchall()
+                
+                updated_count = 0
+                for (server_id,) in servers:
+                    cursor.execute("""
+                        UPDATE server_config 
+                        SET enabled_tools = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE server_id = ?
+                    """, (','.join(tool_names), server_id))
+                    updated_count += 1
+                
+                conn.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': f'Synced {len(tool_names)} tools to {updated_count} server(s)',
+                'tools': tool_names
+            })
+            
+        except Exception as e:
+            import traceback
+            print(f"Error syncing tools: {traceback.format_exc()}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    @app.route('/api/tools/available')
+    def api_available_tools():
+        """Get all available tools with their status."""
+        try:
+            import json
+            from pathlib import Path
+            
+            tools_info = []
+            
+            if not app.bot:
+                return jsonify({'success': False, 'error': 'Bot not running'}), 400
+            
+            # Get all loaded tools from bot
+            for tool_name, tool in app.bot.tools.items():
+                tool_def = tool.get_definition()
+                
+                # Find plugin info if it's from a plugin
+                plugin_info = None
+                builtin = False
+                
+                plugins_dir = Path('plugins')
+                if plugins_dir.exists():
+                    for plugin_dir in plugins_dir.iterdir():
+                        if not plugin_dir.is_dir():
+                            continue
+                        
+                        manifest_path = plugin_dir / 'manifest.json'
+                        if manifest_path.exists():
+                            with open(manifest_path, 'r', encoding='utf-8') as f:
+                                manifest = json.load(f)
+                                
+                                # Check if this tool belongs to this plugin
+                                tool_names_in_plugin = [t.get('name') for t in manifest.get('tools', [])]
+                                if tool_name in tool_names_in_plugin:
+                                    plugin_info = {
+                                        'name': manifest.get('name'),
+                                        'icon': manifest.get('icon', '🔌'),
+                                        'author': manifest.get('author', 'Unknown')
+                                    }
+                                    builtin = manifest.get('builtin', False)
+                                    break
+                
+                # Check if tool is enabled (get from first server config)
+                enabled = False
+                with sqlite3.connect(app.config_manager.db_path) as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT enabled_tools FROM server_config LIMIT 1")
+                    result = cursor.fetchone()
+                    if result and result[0]:
+                        enabled_tools = result[0].split(',')
+                        enabled = tool_name in enabled_tools
+                
+                tools_info.append({
+                    'name': tool_name,
+                    'description': tool_def.description,
+                    'enabled': enabled,
+                    'builtin': builtin,
+                    'plugin': plugin_info
+                })
+            
+            return jsonify({'success': True, 'tools': tools_info})
+            
+        except Exception as e:
+            import traceback
+            print(f"Error getting available tools: {traceback.format_exc()}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    @app.route('/api/tools/toggle/<tool_name>', methods=['POST'])
+    def api_toggle_tool(tool_name):
+        """Toggle a tool on/off for all servers."""
+        try:
+            data = request.json or {}
+            enabled = data.get('enabled', True)
+            
+            # Update all server configs
+            with sqlite3.connect(app.config_manager.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT server_id, enabled_tools FROM server_config")
+                servers = cursor.fetchall()
+                
+                for server_id, enabled_tools_str in servers:
+                    enabled_tools = enabled_tools_str.split(',') if enabled_tools_str else []
+                    
+                    if enabled:
+                        # Add tool if not present
+                        if tool_name not in enabled_tools:
+                            enabled_tools.append(tool_name)
+                    else:
+                        # Remove tool if present
+                        if tool_name in enabled_tools:
+                            enabled_tools.remove(tool_name)
+                    
+                    cursor.execute("""
+                        UPDATE server_config 
+                        SET enabled_tools = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE server_id = ?
+                    """, (','.join(enabled_tools), server_id))
+                
+                conn.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': f'Tool {tool_name} {"enabled" if enabled else "disabled"}',
+                'tool_name': tool_name,
+                'enabled': enabled
+            })
+            
+        except Exception as e:
+            import traceback
+            print(f"Error toggling tool: {traceback.format_exc()}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    return app
+
+
+
+if __name__ == '__main__':
+    app = create_app()
+    app.run(debug=True)

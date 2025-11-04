@@ -9,6 +9,8 @@ from .anthropic_provider import AnthropicProvider
 from .ollama_provider import OllamaProvider
 from .openrouter_provider import OpenRouterProvider
 from .gemini_provider import GeminiProvider
+from .lmstudio_provider import LMStudioProvider
+from .custom_provider import CustomProvider
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -23,6 +25,8 @@ class LLMProviderFactory:
         'anthropic': AnthropicProvider,
         'ollama': OllamaProvider,
         'openrouter': OpenRouterProvider,
+        'lmstudio': LMStudioProvider,
+        'custom': CustomProvider,
     }
     
     @classmethod

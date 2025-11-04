@@ -589,12 +589,23 @@ class DiscordLLMBot:
         """Start the web dashboard."""
         try:
             from dashboard.app import create_app
+            import socket
             
             app = create_app(self.config_manager, self)
-            host = self.config_manager.get('dashboard.host', '127.0.0.1')
+            host = self.config_manager.get('dashboard.host', '0.0.0.0')
             port = self.config_manager.get('dashboard.port', 5000)
             
-            logger.info(f"Starting dashboard at http://{host}:{port}")
+            # Get local IP address
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.connect(("8.8.8.8", 80))
+                local_ip = s.getsockname()[0]
+                s.close()
+            except:
+                local_ip = 'localhost'
+            
+            logger.info(f"Starting dashboard at http://localhost:{port}")
+            logger.info(f"Network access: http://{local_ip}:{port}")
             
             # Run Flask in a separate thread
             import threading

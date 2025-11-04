@@ -19,8 +19,9 @@ OpenLLM — a powerful Discord assistant platform powered by Large Language Mode
 
 ## ✨ Features
 
-- 🧠 **Multi-LLM Support**: Google Gemini (recommended), OpenAI, Anthropic, OpenRouter, Ollama
-- 🎨 **Modern Web Dashboard**: Dark-mode web interface for configuration and monitoring
+- 🧠 **Multi-LLM Support**: Google Gemini (recommended), OpenAI, Anthropic, OpenRouter, Ollama, LM Studio, Custom OpenAI-compatible endpoints
+- 🎨 **Modern Web Dashboard**: Dark-mode, mobile-friendly web interface for configuration and monitoring
+- 🔑 **Provider Management**: Configure API keys and endpoints directly from the dashboard
 - 🌐 **Web Setup Wizard**: Browser-based setup experience with guided configuration
 - 🔧 **Highly Customizable**: Plugin system and MCP server integration
 - 🔍 **Web Search**: Built-in web search tool with multiple providers
@@ -28,6 +29,7 @@ OpenLLM — a powerful Discord assistant platform powered by Large Language Mode
 - 📊 **Analytics**: Usage statistics and cost tracking
 - 🔌 **Plugin Marketplace**: Browse and install community extensions
 - 🪟 **Windows Support**: One-click setup with `setup.bat`
+- 📱 **Mobile Friendly**: Access dashboard from your phone with responsive design
 
 ## 🚀 Quick Start
 
@@ -118,12 +120,37 @@ The wizard saves everything to `.env` and `config.yaml` automatically.
 
 Access the web dashboard at: `http://localhost:5000`
 
-From here you can:
-- **Edit Configuration**: Click "Edit Settings" to modify LLM provider, model, temperature, and tools
+From your local network, find the IP address displayed when the bot starts:
+```
+Dashboard running at http://192.168.1.100:5000
+```
+
+From the dashboard you can:
+- **Edit Configuration**: Click "Edit Settings" to modify LLM provider, model, temperature, and system prompt
+- **AI-Enhanced Prompts**: Use AI to help craft better system prompts
+- **Provider Management**: Configure API keys and custom endpoints for all supported providers
+- **Local LLM Support**: Configure LM Studio, Ollama, or custom OpenAI-compatible endpoints
 - View connected servers and bot status
 - Manage plugins and extensions
 - View usage statistics and costs
 - Monitor real-time activity
+
+### Supported Providers
+
+#### Cloud Providers (Require API Key)
+- **Google Gemini** (Recommended) - Best value, high quality
+- **OpenAI** - GPT-4, GPT-4o, GPT-3.5
+- **Anthropic** - Claude models
+- **OpenRouter** - Access to many models through one API
+
+#### Local Providers (No API Key Required)
+- **Ollama** - Run models locally (llama2, mistral, etc.)
+- **LM Studio** - Local inference server with GUI
+
+#### Custom Endpoints
+- **Custom Provider** - Any OpenAI-compatible API endpoint
+
+Configure providers from the **Provider Management** section in the dashboard.
 
 ## 🔌 Plugin Development
 

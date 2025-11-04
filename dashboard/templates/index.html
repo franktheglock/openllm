@@ -45,6 +45,62 @@
         .hidden {
             display:none !important;
         }
+        .provider-config-form {
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+        .hamburger {
+            display:none;
+            position:fixed;
+            top:20px;
+            left:20px;
+            z-index:1001;
+            width:44px;
+            height:44px;
+            background:var(--sidebar);
+            border:1px solid var(--panel-border);
+            border-radius:12px;
+            cursor:pointer;
+            flex-direction:column;
+            align-items:center;
+            justify-content:center;
+            gap:5px;
+            transition:all 0.3s ease;
+        }
+        .hamburger:hover {
+            background:var(--panel-hover);
+        }
+        .hamburger span {
+            display:block;
+            width:20px;
+            height:2px;
+            background:var(--text);
+            border-radius:2px;
+            transition:all 0.3s ease;
+        }
+        .hamburger.active span:nth-child(1) {
+            transform:rotate(45deg) translate(5px, 5px);
+        }
+        .hamburger.active span:nth-child(2) {
+            opacity:0;
+        }
+        .hamburger.active span:nth-child(3) {
+            transform:rotate(-45deg) translate(6px, -6px);
+        }
+        .mobile-overlay {
+            display:none;
+            position:fixed;
+            inset:0;
+            background:rgba(0,0,0,0.5);
+            z-index:999;
+            opacity:0;
+            transition:opacity 0.3s ease;
+            pointer-events:none;
+        }
+        .mobile-overlay.active {
+            opacity:1;
+            pointer-events:auto;
+        }
         .app-shell {
             display:flex;
             width:100%;
@@ -61,6 +117,7 @@
             top:0;
             height:100vh;
             overflow-y:auto;
+            transition:transform 0.3s ease;
         }
         .sidebar::-webkit-scrollbar {
             width:6px;
@@ -137,6 +194,8 @@
             font-weight:500;
             color:var(--muted);
             transition:all 0.2s ease;
+            touch-action:manipulation;
+            -webkit-tap-highlight-color:transparent;
         }
         .nav-link:hover {
             color:var(--text);
@@ -159,6 +218,8 @@
             color:#e0e7ff;
             font-weight:600;
             transition:all 0.2s ease;
+            touch-action:manipulation;
+            -webkit-tap-highlight-color:transparent;
         }
         .marketplace-link:hover {
             background:linear-gradient(135deg, var(--accent-soft), var(--accent));
@@ -172,6 +233,8 @@
             display:flex;
             flex-direction:column;
             gap:48px;
+            position:relative;
+            z-index:1;
         }
         .main-content::-webkit-scrollbar {
             width:8px;
@@ -391,24 +454,34 @@
             font-weight:600;
             font-size:14px;
             transition:transform 0.2s ease, box-shadow 0.2s ease;
+            touch-action:manipulation;
+            -webkit-tap-highlight-color:transparent;
+            user-select:none;
         }
         .btn-primary {
             background:linear-gradient(135deg, var(--accent-soft), var(--accent));
             color:#ffffff;
             box-shadow:0 16px 30px rgba(99,102,241,0.25);
         }
-        .btn-primary:hover {
+        .btn-primary:hover, .btn-primary:active {
             transform:translateY(-1px);
             box-shadow:0 20px 35px rgba(99,102,241,0.35);
+        }
+        .btn-primary:active {
+            transform:translateY(0);
         }
         .btn-secondary {
             background:rgba(148,163,184,0.18);
             color:var(--muted);
             border:1px solid rgba(148,163,184,0.35);
         }
-        .btn-secondary:hover {
+        .btn-secondary:hover, .btn-secondary:active {
             transform:translateY(-1px);
             background:rgba(148,163,184,0.28);
+        }
+        .btn-secondary:active {
+            transform:translateY(0);
+            background:rgba(148,163,184,0.35);
         }
         table {
             width:100%;
@@ -489,53 +562,231 @@
             border:1px solid rgba(148,163,184,0.12);
         }
         @media (max-width:1024px) {
+            .hamburger {
+                display:flex;
+            }
+            .mobile-overlay {
+                display:block;
+            }
             body {
                 flex-direction:column;
             }
             .sidebar {
-                position:relative;
-                width:100%;
-                height:auto;
-                border-right:none;
-                border-bottom:1px solid var(--panel-border);
-                flex-direction:row;
-                gap:16px;
-                padding:24px;
-                overflow:hidden;
+                position:fixed;
+                top:0;
+                left:0;
+                width:280px;
+                height:100vh;
+                z-index:1000;
+                transform:translateX(-100%);
+                padding:80px 24px 24px 24px;
             }
-            .sidebar-nav {
-                display:grid;
-                grid-template-columns:repeat(2, minmax(0, 1fr));
-                gap:12px;
-            }
-            .marketplace-link {
-                margin-top:16px;
+            .sidebar.active {
+                transform:translateX(0);
             }
             .main-content {
-                padding:28px 24px;
+                padding:80px 24px 24px 24px;
                 height:auto;
+                margin-left:0;
+            }
+            .topbar {
+                flex-direction:column;
+                gap:16px;
+            }
+            .topbar h1 {
+                font-size:24px;
+            }
+            .grid {
+                grid-template-columns:1fr;
+                gap:20px;
+            }
+            .card-header {
+                flex-direction:column;
+                align-items:flex-start;
+                gap:12px;
+            }
+            .button-group {
+                width:100%;
+                justify-content:stretch;
+            }
+            .button-group > * {
+                flex:1;
             }
         }
         @media (max-width:768px) {
-            .topbar {
-                flex-direction:column;
-                align-items:flex-start;
-            }
             .sidebar {
-                flex-direction:column;
+                width:260px;
+                padding:80px 20px 20px 20px;
+            }
+            .sidebar-brand {
+                flex-direction:row;
+                gap:12px;
+            }
+            .brand-icon {
+                width:36px;
+                height:36px;
+                font-size:18px;
+            }
+            .sidebar-brand-title {
+                font-size:16px;
             }
             .sidebar-nav {
-                grid-template-columns:repeat(1, minmax(0, 1fr));
+                display:flex;
+                flex-direction:column;
+                gap:8px;
+            }
+            .nav-link {
+                font-size:14px;
+                padding:12px 14px;
+                width:100%;
+            }
+            .marketplace-link {
+                margin-top:auto;
+                width:100%;
+            }
+            .main-content {
+                padding:80px 16px 16px 16px;
+            }
+            .topbar {
+                padding:0;
+            }
+            .topbar h1 {
+                font-size:20px;
+            }
+            .topbar-subtitle {
+                font-size:13px;
+            }
+            .section {
+                padding:24px 0;
+            }
+            .section-title {
+                font-size:16px;
+                margin-bottom:16px;
+            }
+            .stat {
+                padding:10px 0;
+            }
+            .stat-label {
+                font-size:11px;
+            }
+            .stat-value {
+                font-size:15px;
+            }
+            .form-control {
+                font-size:14px;
+                padding:12px 14px;
+            }
+            .btn {
+                font-size:14px;
+                padding:12px 18px;
+                min-height:44px;
+                display:inline-flex;
+                align-items:center;
+                justify-content:center;
+            }
+            .button-group .btn {
+                min-width:80px;
+            }
+            table {
+                font-size:12px;
+            }
+            th, td {
+                padding:10px 8px;
+            }
+            .log-output {
+                font-size:11px;
+                max-height:300px;
+            }
+            /* Make form groups stack better on mobile */
+            .form-group {
+                margin-bottom:16px;
+            }
+            .form-group label {
+                font-size:13px;
+            }
+            /* Better touch targets */
+            .toggle-switch {
+                padding:16px 0;
+            }
+            .toggle-switch input[type="checkbox"] {
+                width:52px;
+                height:28px;
+            }
+            .toggle-switch input[type="checkbox"]::before {
+                width:22px;
+                height:22px;
+            }
+            .toggle-switch input + label {
+                padding:8px 0;
+                font-size:14px;
+            }
+            /* Card headers on mobile */
+            .card-header {
+                gap:14px;
+            }
+            .card-header h3 {
+                font-size:16px;
+            }
+            /* Scrollable tables on mobile */
+            .card {
+                overflow-x:auto;
+            }
+            /* Better spacing for AI prompt helper on mobile */
+            #ai-prompt-helper {
+                padding:12px;
+            }
+            #ai-prompt-helper textarea {
+                font-size:13px;
+            }
+            #ai-prompt-helper .btn {
+                padding:14px 20px;
+            }
+        }
+        @media (max-width:480px) {
+            .hamburger {
+                top:16px;
+                left:16px;
+                width:40px;
+                height:40px;
+            }
+            .sidebar {
+                width:240px;
+            }
+            .sidebar-brand-subtitle {
+                display:none;
+            }
+            .topbar h1 {
+                font-size:18px;
             }
             .grid {
-                grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));
+                gap:16px;
+            }
+            .card {
+                padding:16px;
+            }
+            .card-header h3 {
+                font-size:15px;
+            }
+            .badge {
+                font-size:10px;
+                padding:4px 8px;
+            }
+            .status-chip {
+                font-size:10px;
+                padding:6px 12px;
             }
         }
     </style>
 </head>
 <body>
+<button class="hamburger" id="hamburger" aria-label="Toggle menu">
+    <span></span>
+    <span></span>
+    <span></span>
+</button>
+<div class="mobile-overlay" id="mobile-overlay"></div>
 <div class="app-shell">
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
         <div class="sidebar-brand">
             <div class="brand-icon">&#9881;</div>
             <div>
@@ -556,6 +807,7 @@
             <a class="nav-link" href="#tools">Tools</a>
             <a class="nav-link" href="#logging">Logs</a>
             <a class="nav-link" href="#tool-usage">Tool Usage</a>
+            <a class="nav-link" href="#provider-management">Providers</a>
             <a class="nav-link" href="#marketplace">Marketplace</a>
         </nav>
         <a class="marketplace-link" href="/marketplace" target="_blank" rel="noopener">Open Marketplace</a>
@@ -784,6 +1036,21 @@
             </div>
         </section>
 
+        <section class="section" id="provider-management">
+            <div class="section-title">Provider Management</div>
+            <div class="grid">
+                <div class="card" id="provider-config-card">
+                    <div class="card-header">
+                        <h3>Configure Providers</h3>
+                        <button class="btn btn-secondary" id="provider-refresh-btn">Refresh</button>
+                    </div>
+                    <div id="provider-config-list">
+                        <!-- Provider configuration forms will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <section class="section" id="marketplace">
             <div class="section-title">Providers & Marketplace</div>
             <div class="grid">
@@ -1006,6 +1273,7 @@
             state.availableProviders = await response.json();
             populateProviderSelect();
             renderProviderList();
+            renderProviderConfig();
             renderMarketplaceSummary();
         } catch (error) {
             console.error('Provider fetch failed:', error);
@@ -1222,6 +1490,223 @@
         `;
     }
 
+    function renderProviderConfig() {
+        const container = document.getElementById('provider-config-list');
+        if (!state.availableProviders.length) {
+            container.textContent = 'Loading provider data...';
+            return;
+        }
+        
+        container.innerHTML = state.availableProviders.map(provider => {
+            const configured = provider.configured || false;
+            const envVar = provider.env_var || 'N/A';
+            const providerId = `provider-${provider.name}`;
+            
+            return `
+                <div class="stat" style="flex-direction:column;align-items:stretch;padding:16px 0;border-bottom:1px solid rgba(148,163,184,0.08);">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;cursor:pointer;" onclick="toggleProviderConfig('${provider.name}')">
+                        <div style="flex:1;">
+                            <span class="stat-label" style="font-size:16px;font-weight:600;color:var(--text);">${provider.display_name || provider.name}</span>
+                            ${provider.recommended ? '<span class="badge badge-recommended" style="margin-left:8px;">Recommended</span>' : ''}
+                            <span class="badge ${configured ? 'badge-success' : 'badge-warning'}" style="margin-left:8px;">${configured ? 'Configured' : 'Not configured'}</span>
+                        </div>
+                        <span id="${providerId}-arrow" style="font-size:20px;color:var(--muted);transition:transform 0.3s ease;">▼</span>
+                    </div>
+                    <div id="${providerId}-config" class="provider-config-form hidden" style="margin-top:8px;">
+                        <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">
+                            ${provider.name === 'lmstudio' ? 'LM Studio local server (no API key required)' : 
+                              provider.name === 'custom' ? 'Custom OpenAI-compatible endpoint' :
+                              provider.name === 'ollama' ? 'Ollama local server (no API key required)' :
+                              `Environment variable: ${envVar}`}
+                        </div>
+                        ${provider.name === 'lmstudio' || provider.name === 'ollama' ? `
+                            <div style="margin-top:8px;">
+                                <input type="text" 
+                                       id="provider-endpoint-${provider.name}" 
+                                       class="form-control" 
+                                       placeholder="${provider.name === 'lmstudio' ? 'http://localhost:1234/v1' : 'http://localhost:11434'}" 
+                                       value="${configured ? (provider.endpoint || '') : ''}"
+                                       style="margin-bottom:8px;">
+                                <button class="btn btn-primary btn-sm" onclick="saveProviderEndpoint('${provider.name}')">Save Endpoint</button>
+                            </div>
+                        ` : provider.name === 'custom' ? `
+                            <div style="margin-top:8px;">
+                                <input type="text" 
+                                       id="provider-endpoint-${provider.name}" 
+                                       class="form-control" 
+                                       placeholder="https://api.example.com/v1" 
+                                       value="${configured ? (provider.endpoint || '') : ''}"
+                                       style="margin-bottom:8px;">
+                                <input type="password" 
+                                       id="provider-key-${provider.name}" 
+                                       class="form-control" 
+                                       placeholder="API Key (optional)" 
+                                       style="margin-bottom:8px;">
+                                <button class="btn btn-primary btn-sm" onclick="saveCustomProvider()">Save Custom Provider</button>
+                            </div>
+                        ` : `
+                            <div style="margin-top:8px;">
+                                <input type="password" 
+                                       id="provider-key-${provider.name}" 
+                                       class="form-control" 
+                                       placeholder="${configured ? '••••••••' : 'Enter API key'}" 
+                                       style="margin-bottom:8px;">
+                                <div style="display:flex;gap:8px;">
+                                    <button class="btn btn-primary btn-sm" onclick="saveProviderKey('${provider.name}', '${envVar}')">Save API Key</button>
+                                    ${configured ? `<button class="btn btn-secondary btn-sm" onclick="clearProviderKey('${provider.name}', '${envVar}')">Clear</button>` : ''}
+                                </div>
+                            </div>
+                        `}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    window.toggleProviderConfig = function(providerName) {
+        const providerId = `provider-${providerName}`;
+        const configDiv = document.getElementById(`${providerId}-config`);
+        const arrow = document.getElementById(`${providerId}-arrow`);
+        
+        if (configDiv && arrow) {
+            configDiv.classList.toggle('hidden');
+            arrow.style.transform = configDiv.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
+        }
+    };
+
+    window.saveProviderKey = async function(providerName, envVar) {
+        const input = document.getElementById(`provider-key-${providerName}`);
+        const apiKey = input.value.trim();
+        
+        if (!apiKey) {
+            alert('Please enter an API key');
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/providers/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    provider: providerName,
+                    env_var: envVar,
+                    api_key: apiKey
+                })
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                alert('API key saved successfully! Restart the bot for changes to take effect.');
+                input.value = '';
+                await loadProviders();
+            } else {
+                throw new Error(result.error || 'Failed to save API key');
+            }
+        } catch (error) {
+            console.error('Save provider key failed:', error);
+            alert('Failed to save API key: ' + error.message);
+        }
+    };
+
+    window.clearProviderKey = async function(providerName, envVar) {
+        if (!confirm('Are you sure you want to clear this API key?')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/providers/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    provider: providerName,
+                    env_var: envVar,
+                    api_key: ''
+                })
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                alert('API key cleared successfully! Restart the bot for changes to take effect.');
+                await loadProviders();
+            } else {
+                throw new Error(result.error || 'Failed to clear API key');
+            }
+        } catch (error) {
+            console.error('Clear provider key failed:', error);
+            alert('Failed to clear API key: ' + error.message);
+        }
+    };
+
+    window.saveProviderEndpoint = async function(providerName) {
+        const input = document.getElementById(`provider-endpoint-${providerName}`);
+        const endpoint = input.value.trim();
+        
+        if (!endpoint) {
+            alert('Please enter an endpoint URL');
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/providers/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    provider: providerName,
+                    endpoint: endpoint
+                })
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                alert('Endpoint saved successfully! Restart the bot for changes to take effect.');
+                await loadProviders();
+            } else {
+                throw new Error(result.error || 'Failed to save endpoint');
+            }
+        } catch (error) {
+            console.error('Save endpoint failed:', error);
+            alert('Failed to save endpoint: ' + error.message);
+        }
+    };
+
+    window.saveCustomProvider = async function() {
+        const endpointInput = document.getElementById('provider-endpoint-custom');
+        const keyInput = document.getElementById('provider-key-custom');
+        
+        const endpoint = endpointInput.value.trim();
+        const apiKey = keyInput.value.trim();
+        
+        if (!endpoint) {
+            alert('Please enter an endpoint URL');
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/providers/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    provider: 'custom',
+                    endpoint: endpoint,
+                    api_key: apiKey || ''
+                })
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                alert('Custom provider configured successfully! Restart the bot for changes to take effect.');
+                endpointInput.value = '';
+                keyInput.value = '';
+                await loadProviders();
+            } else {
+                throw new Error(result.error || 'Failed to save custom provider');
+            }
+        } catch (error) {
+            console.error('Save custom provider failed:', error);
+            alert('Failed to save custom provider: ' + error.message);
+        }
+    };
+
     window.toggleTool = async function(toolName, enabled) {
         try {
             const response = await fetch(`/api/tools/toggle/${toolName}`, {
@@ -1319,25 +1804,92 @@
         }
     }
 
+    function toggleMobileMenu() {
+        const hamburger = document.getElementById('hamburger');
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('mobile-overlay');
+        
+        hamburger.classList.toggle('active');
+        sidebar.classList.toggle('active');
+        overlay.classList.toggle('active');
+        
+        // Prevent body scroll when menu is open
+        document.body.style.overflow = sidebar.classList.contains('active') ? 'hidden' : '';
+    }
+
+    function closeMobileMenu() {
+        const hamburger = document.getElementById('hamburger');
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('mobile-overlay');
+        
+        hamburger.classList.remove('active');
+        sidebar.classList.remove('active');
+        overlay.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
     function bindEvents() {
-        document.getElementById('llm-edit-btn').addEventListener('click', enterLlmEdit);
-        document.getElementById('llm-cancel-btn').addEventListener('click', () => {
+        // Mobile menu
+        const hamburger = document.getElementById('hamburger');
+        const overlay = document.getElementById('mobile-overlay');
+        
+        if (hamburger) {
+            hamburger.addEventListener('click', toggleMobileMenu);
+            hamburger.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                toggleMobileMenu();
+            }, { passive: false });
+        }
+        
+        if (overlay) {
+            overlay.addEventListener('click', closeMobileMenu);
+        }
+        
+        // Close mobile menu when clicking a nav link
+        document.querySelectorAll('.nav-link, .marketplace-link').forEach(link => {
+            link.addEventListener('click', () => {
+                if (window.innerWidth <= 1024) {
+                    closeMobileMenu();
+                }
+            });
+        });
+        
+        // Add click and touch listeners to all buttons
+        const addButtonListener = (id, handler) => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.addEventListener('click', handler);
+                element.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    handler(e);
+                }, { passive: false });
+            }
+        };
+        
+        addButtonListener('llm-edit-btn', enterLlmEdit);
+        addButtonListener('llm-cancel-btn', () => {
             exitLlmEdit();
             updateLlmSummary(state.currentConfig);
         });
-        document.getElementById('llm-save-btn').addEventListener('click', saveLlmConfig);
-        document.getElementById('llm-provider-select').addEventListener('change', event => {
-            updateModelOptions(event.target.value);
-        });
-        document.getElementById('ai-enhance-prompt-btn').addEventListener('click', showAiPromptHelper);
-        document.getElementById('ai-cancel-btn').addEventListener('click', hideAiPromptHelper);
-        document.getElementById('ai-generate-btn').addEventListener('click', generateEnhancedPrompt);
-        document.getElementById('refresh-servers').addEventListener('click', loadServers);
-        document.getElementById('refresh-tools').addEventListener('click', loadTools);
-        document.getElementById('refresh-plugins').addEventListener('click', loadPlugins);
-        document.getElementById('refresh-logs').addEventListener('click', loadLogs);
-        document.getElementById('refresh-tool-calls').addEventListener('click', loadToolCalls);
-        document.getElementById('refresh-providers').addEventListener('click', loadProviders);
+        addButtonListener('llm-save-btn', saveLlmConfig);
+        addButtonListener('ai-enhance-prompt-btn', showAiPromptHelper);
+        addButtonListener('ai-cancel-btn', hideAiPromptHelper);
+        addButtonListener('ai-generate-btn', generateEnhancedPrompt);
+        addButtonListener('refresh-servers', loadServers);
+        addButtonListener('refresh-tools', loadTools);
+        addButtonListener('refresh-plugins', loadPlugins);
+        addButtonListener('refresh-logs', loadLogs);
+        addButtonListener('refresh-tool-calls', loadToolCalls);
+        addButtonListener('refresh-providers', loadProviders);
+        addButtonListener('provider-refresh-btn', loadProviders);
+        
+        const providerSelect = document.getElementById('llm-provider-select');
+        if (providerSelect) {
+            providerSelect.addEventListener('change', event => {
+                updateModelOptions(event.target.value);
+            });
+        }
+        
         window.addEventListener('scroll', handleNavHighlight);
     }
 

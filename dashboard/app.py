@@ -6,8 +6,12 @@ from flask_cors import CORS
 import sqlite3
 from datetime import datetime, timedelta
 from typing import Optional
+from pathlib import Path
 
 from src.config.manager import ConfigManager
+from src.utils.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 
 def create_app(config_manager: Optional[ConfigManager] = None, bot = None):
@@ -248,75 +252,189 @@ def create_app(config_manager: Optional[ConfigManager] = None, bot = None):
         """Get available LLM providers and models."""
         from src.llm.factory import LLMProviderFactory
         import asyncio
+        import os
         
         providers = []
         provider_info = {
             'gemini': {
                 'name': 'Google Gemini',
                 'description': 'Fast, affordable, and powerful',
-                'recommended': True
+                'recommended': True,
+                'env_var': 'GEMINI_API_KEY'
             },
             'openai': {
                 'name': 'OpenAI',
                 'description': 'GPT-4 and GPT-3.5 models',
-                'recommended': False
+                'recommended': False,
+                'env_var': 'OPENAI_API_KEY'
             },
             'anthropic': {
                 'name': 'Anthropic',
                 'description': 'Claude 3 family',
-                'recommended': False
+                'recommended': False,
+                'env_var': 'ANTHROPIC_API_KEY'
             },
             'ollama': {
                 'name': 'Ollama',
                 'description': 'Local models (free)',
-                'recommended': False
+                'recommended': False,
+                'env_var': None  # No API key needed
             },
             'openrouter': {
                 'name': 'OpenRouter',
                 'description': 'Access to multiple providers',
-                'recommended': False
+                'recommended': False,
+                'env_var': 'OPENROUTER_API_KEY'
+            },
+            'lmstudio': {
+                'name': 'LM Studio',
+                'description': 'Local LM Studio server',
+                'recommended': False,
+                'env_var': None  # No API key needed
+            },
+            'custom': {
+                'name': 'Custom Endpoint',
+                'description': 'OpenAI-compatible API endpoint',
+                'recommended': False,
+                'env_var': 'CUSTOM_API_KEY'
             }
         }
         
         for provider_name in LLMProviderFactory.get_available_providers():
+            info = provider_info.get(provider_name, {})
+            env_var = info.get('env_var')
+            
+            # Check if provider is configured (has API key or doesn't need one)
+            is_configured = False
+            endpoint = None
+            
+            if env_var is None:  # Ollama, LM Studio, etc.
+                # Check if endpoint is configured
+                if provider_name == 'lmstudio':
+                    endpoint = os.getenv('LMSTUDIO_BASE_URL', 'http://localhost:1234/v1')
+                    is_configured = True
+                elif provider_name == 'ollama':
+                    endpoint = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')
+                    is_configured = True
+                elif provider_name == 'custom':
+                    endpoint = os.getenv('CUSTOM_OPENAI_BASE_URL')
+                    api_key = os.getenv('CUSTOM_OPENAI_API_KEY')
+                    is_configured = bool(endpoint and endpoint.strip())
+            elif env_var:
+                api_key = os.getenv(env_var)
+                is_configured = bool(api_key and api_key.strip() and api_key != f'your_{env_var.lower()}')
+            
             try:
-                # Try to create provider to get available models
-                provider = LLMProviderFactory.create_provider(provider_name)
-                
-                # For OpenRouter, try to fetch models from API
-                if provider_name == 'openrouter' and hasattr(provider, 'fetch_models_from_api'):
-                    try:
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        models = loop.run_until_complete(provider.fetch_models_from_api())
-                        loop.close()
-                    except:
+                if is_configured:
+                    # Try to create provider to get available models
+                    provider = LLMProviderFactory.create_provider(provider_name)
+                    
+                    # For OpenRouter, try to fetch models from API
+                    if provider_name == 'openrouter' and hasattr(provider, 'fetch_models_from_api'):
+                        try:
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            models = loop.run_until_complete(provider.fetch_models_from_api())
+                            loop.close()
+                        except:
+                            models = provider.get_available_models()
+                    else:
                         models = provider.get_available_models()
+                    
+                    providers.append({
+                        'name': provider_name,
+                        'display_name': info.get('name', provider_name.title()),
+                        'description': info.get('description', ''),
+                        'recommended': info.get('recommended', False),
+                        'models': models,
+                        'available': True,
+                        'configured': True,
+                        'env_var': env_var,
+                        'endpoint': endpoint
+                    })
                 else:
-                    models = provider.get_available_models()
-                
-                info = provider_info.get(provider_name, {})
-                
-                providers.append({
-                    'name': provider_name,
-                    'display_name': info.get('name', provider_name.title()),
-                    'description': info.get('description', ''),
-                    'recommended': info.get('recommended', False),
-                    'models': models,
-                    'available': True
-                })
-            except:
-                info = provider_info.get(provider_name, {})
+                    providers.append({
+                        'name': provider_name,
+                        'display_name': info.get('name', provider_name.title()),
+                        'description': info.get('description', ''),
+                        'recommended': info.get('recommended', False),
+                        'models': [],
+                        'available': False,
+                        'configured': False,
+                        'env_var': env_var,
+                        'endpoint': endpoint
+                    })
+            except Exception as e:
+                logger.error(f"Error loading provider {provider_name}: {e}")
                 providers.append({
                     'name': provider_name,
                     'display_name': info.get('name', provider_name.title()),
                     'description': info.get('description', ''),
                     'recommended': info.get('recommended', False),
                     'models': [],
-                    'available': False
+                    'available': False,
+                    'configured': is_configured,
+                    'env_var': env_var,
+                    'endpoint': endpoint
                 })
         
         return jsonify(providers)
+    
+    @app.route('/api/providers/config', methods=['POST'])
+    def api_save_provider_config():
+        """Save provider configuration (API keys, endpoints)."""
+        try:
+            data = request.json
+            provider = data.get('provider')
+            api_key = data.get('api_key')
+            endpoint = data.get('endpoint')
+            env_var = data.get('env_var')
+            
+            if not provider:
+                return jsonify({'success': False, 'error': 'Provider name required'}), 400
+            
+            # Load or create .env file
+            env_path = Path(__file__).parent.parent / '.env'
+            env_vars = {}
+            
+            if env_path.exists():
+                with open(env_path, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith('#') and '=' in line:
+                            key, value = line.split('=', 1)
+                            env_vars[key.strip()] = value.strip()
+            
+            # Update configuration based on provider type
+            if provider in ['lmstudio', 'ollama']:
+                # Save endpoint for local providers
+                if endpoint:
+                    env_key = f'{provider.upper()}_BASE_URL'
+                    env_vars[env_key] = endpoint
+            elif provider == 'custom':
+                # Save both endpoint and API key for custom provider
+                if endpoint:
+                    env_vars['CUSTOM_OPENAI_BASE_URL'] = endpoint
+                if api_key:
+                    env_vars['CUSTOM_OPENAI_API_KEY'] = api_key
+            else:
+                # Save API key for standard providers
+                if env_var and api_key is not None:
+                    if api_key:
+                        env_vars[env_var] = api_key
+                    else:
+                        # Remove the key if empty string is provided
+                        env_vars.pop(env_var, None)
+            
+            # Write back to .env file
+            with open(env_path, 'w') as f:
+                for key, value in env_vars.items():
+                    f.write(f'{key}={value}\n')
+            
+            return jsonify({'success': True})
+        except Exception as e:
+            logger.error(f"Failed to save provider config: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
     
     @app.route('/api/config/llm', methods=['POST'])
     def api_update_llm_config():

@@ -90,10 +90,18 @@ class DiscordLLMBot:
                 continue
             manifest_path = plugin_dir / 'manifest.json'
             if manifest_path.exists():
-                with open(manifest_path, 'r', encoding='utf-8') as f:
-                    manifest = json.load(f)
-                    if manifest.get('builtin', False):
-                        builtin_plugins.append((manifest.get('name'), manifest.get('version', '1.0.0')))
+                try:
+                    with open(manifest_path, 'r', encoding='utf-8') as f:
+                        content = f.read().strip()
+                        if not content:
+                            logger.warning(f"Skipping plugin {plugin_dir.name}: Empty manifest.json")
+                            continue
+                        manifest = json.loads(content)
+                        if manifest.get('builtin', False):
+                            builtin_plugins.append((manifest.get('name'), manifest.get('version', '1.0.0')))
+                except (json.JSONDecodeError, KeyError) as e:
+                    logger.warning(f"Skipping plugin {plugin_dir.name}: Invalid manifest.json - {e}")
+                    continue
         
         # Install built-in plugins if not in database
         if builtin_plugins:
@@ -124,9 +132,16 @@ class DiscordLLMBot:
             try:
                 # Load manifest
                 with open(manifest_path, 'r', encoding='utf-8') as f:
-                    manifest = json.load(f)
+                    content = f.read().strip()
+                    if not content:
+                        logger.warning(f"Skipping plugin {plugin_dir.name}: Empty manifest.json")
+                        continue
+                    manifest = json.loads(content)
                 
                 plugin_name = manifest.get('name')
+                if not plugin_name:
+                    logger.warning(f"Skipping plugin {plugin_dir.name}: No 'name' field in manifest")
+                    continue
                 
                 # Check if plugin is enabled
                 if plugin_name not in enabled_plugins or not enabled_plugins[plugin_name]:

@@ -61,6 +61,7 @@ class SetupWizardGUI(ctk.CTk):
             "system_prompt": tk.StringVar(
                 value="You are a helpful Discord bot assistant. Be friendly, concise, and helpful."
             ),
+            "enforce_char_limit": tk.BooleanVar(value=False),
             "enable_search": tk.BooleanVar(value=True),
             "search_provider": tk.StringVar(value="duckduckgo"),
             "searxng_url": tk.StringVar(value="http://localhost:8888"),
@@ -452,6 +453,31 @@ class SetupWizardGUI(ctk.CTk):
             assistant_frame, text="", font=ctk.CTkFont(size=11), text_color="gray"
         )
         self.prompt_status_label.pack(anchor="w", padx=10, pady=2)
+        
+        # Character limit enforcement option
+        char_limit_frame = ctk.CTkFrame(self.content_frame)
+        char_limit_frame.pack(fill="x", padx=40, pady=10)
+        
+        ctk.CTkLabel(
+            char_limit_frame,
+            text="⚙️ Response Settings",
+            font=ctk.CTkFont(size=14, weight="bold"),
+        ).pack(anchor="w", padx=10, pady=5)
+        
+        char_limit_checkbox = ctk.CTkCheckBox(
+            char_limit_frame,
+            text="Instruct bot to keep responses under 2000 characters (prevents message splitting)",
+            variable=self.setup_data["enforce_char_limit"],
+            font=ctk.CTkFont(size=12),
+        )
+        char_limit_checkbox.pack(anchor="w", padx=10, pady=10)
+        
+        ctk.CTkLabel(
+            char_limit_frame,
+            text="When enabled, adds instructions to the system prompt asking the LLM to keep responses concise.",
+            font=ctk.CTkFont(size=10),
+            text_color="gray",
+        ).pack(anchor="w", padx=10, pady=(0, 10))
 
     def generate_system_prompt(self):
         """Generate a system prompt using AI."""
@@ -477,7 +503,6 @@ class SetupWizardGUI(ctk.CTk):
         self.prompt_status_label.configure(text="🤖 Generating prompt...")
         self.generate_prompt_btn.configure(state="disabled")
         self.update()
-<<<<<<< HEAD
         
         # Run generation in background thread to avoid freezing UI
         import threading
@@ -496,31 +521,12 @@ class SetupWizardGUI(ctk.CTk):
             
             # Generate the prompt
             assistant_prompt = f"""You are a helpful assistant that creates system prompts for Discord bots.
-=======
-
-        # Run the async generation in a separate thread to avoid blocking the GUI
-        import threading
-
-        def run_generation():
-            try:
-                # Import the provider
-                from src.llm.factory import LLMProviderFactory
-                import asyncio
-                from src.llm.base import Message
-
-                # Create provider instance
-                llm = LLMProviderFactory.create_provider(provider, api_key=api_key)
-
-                # Generate the prompt
-                assistant_prompt = f"""You are a helpful assistant that creates system prompts for Discord bots.
->>>>>>> bbf24e69cbf4fc5beed296827ab77ffc4429793b
 The user wants their bot to: {user_request}
 
 Create a clear, concise system prompt (2-4 sentences) that defines the bot's personality, tone, and behavior.
 The prompt should be professional and suitable for a Discord bot.
 
 Respond with ONLY the system prompt text, nothing else."""
-<<<<<<< HEAD
             
             # Run async generation
             import asyncio
@@ -563,54 +569,6 @@ Respond with ONLY the system prompt text, nothing else."""
         
         self.generate_prompt_btn.configure(state="normal")
     
-=======
-
-                async def generate():
-                    response = await llm.complete(
-                        messages=[Message(role="user", content=assistant_prompt)],
-                        model=model,
-                        max_tokens=300,
-                        temperature=0.7,
-                    )
-                    return response.content.strip()
-
-                # Run the async function in a new event loop
-                generated_prompt = asyncio.run(generate())
-
-                # Update GUI from the main thread using after()
-                self.after(0, self._update_generated_prompt, generated_prompt, None)
-
-            except Exception as e:
-                logger.error(f"Failed to generate prompt: {e}", exc_info=True)
-                # Update GUI from the main thread using after()
-                self.after(0, self._update_generated_prompt, None, str(e))
-
-        # Start the generation in a background thread
-        thread = threading.Thread(target=run_generation, daemon=True)
-        thread.start()
-
-    def _update_generated_prompt(self, generated_prompt, error):
-        """Update the GUI with the generated prompt (called from main thread)."""
-        try:
-            if error:
-                messagebox.showerror(
-                    "Generation Failed", f"Could not generate prompt: {error}"
-                )
-                self.prompt_status_label.configure(
-                    text="✗ Generation failed", text_color="red"
-                )
-            else:
-                # Update the text area
-                self.system_prompt_text.delete("1.0", "end")
-                self.system_prompt_text.insert("1.0", generated_prompt)
-                self.setup_data["system_prompt"].set(generated_prompt)
-                self.prompt_status_label.configure(
-                    text="✓ Prompt generated successfully!", text_color="green"
-                )
-        finally:
-            self.generate_prompt_btn.configure(state="normal")
-
->>>>>>> bbf24e69cbf4fc5beed296827ab77ffc4429793b
     def show_tools_step(self):
         """Step 4: Tools Configuration."""
         title = ctk.CTkLabel(
@@ -1169,6 +1127,9 @@ Note: Requires payment method for usage.""",
             )
             self.config_manager.set(
                 "llm.system_prompt", self.setup_data["system_prompt"].get()
+            )
+            self.config_manager.set(
+                "llm.enforce_char_limit", self.setup_data["enforce_char_limit"].get()
             )
 
             self.config_manager.set(

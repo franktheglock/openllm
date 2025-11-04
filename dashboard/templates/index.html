@@ -450,6 +450,15 @@
                                    placeholder="Enter number or 'auto' for OpenRouter" value="4096">
                             <small style="color: #6b7280;">Maximum length of response. Use "auto" for OpenRouter to use model's context window.</small>
                         </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="enforceCharLimitInput" style="margin-right: 8px;">
+                                Enforce 2000 character limit (prevents message splitting)
+                            </label>
+                            <small style="color: #6b7280; display: block; margin-left: 24px;">
+                                When enabled, instructs the bot to keep responses under 2000 characters to fit in a single Discord message.
+                            </small>
+                        </div>
                     </div>
                     
                     <div class="config-section">
@@ -714,6 +723,10 @@
                 document.getElementById('maxTokensInput').value = 
                     currentConfig.max_tokens || currentConfig.llm?.max_tokens || 4096;
                 
+                // Set enforce char limit checkbox
+                document.getElementById('enforceCharLimitInput').checked = 
+                    currentConfig.enforce_char_limit || false;
+                
                 updateToolsEdit();
             } else {
                 document.getElementById('configDisplay').classList.remove('hidden');
@@ -745,6 +758,7 @@
                 const temperature = parseFloat(document.getElementById('temperatureInput').value);
                 const maxTokensValue = document.getElementById('maxTokensInput').value.trim();
                 const maxTokens = maxTokensValue.toLowerCase() === 'auto' ? 'auto' : parseInt(maxTokensValue);
+                const enforceCharLimit = document.getElementById('enforceCharLimitInput').checked;
                 
                 // Use server-specific config endpoint
                 const serverId = currentConfig.server_id;
@@ -756,7 +770,8 @@
                     llm_provider: provider,
                     llm_model: model,
                     temperature: temperature,
-                    max_tokens: maxTokens
+                    max_tokens: maxTokens,
+                    enforce_char_limit: enforceCharLimit
                 };
                 
                 // Update server-specific LLM config

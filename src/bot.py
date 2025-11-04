@@ -13,6 +13,7 @@ from src.llm.factory import LLMProviderFactory
 from src.llm.base import Message, BaseLLMProvider
 from src.tools.base import BaseTool
 from src.utils.logger import setup_logger
+from src.utils.conversation_manager import ConversationManager
 
 logger = setup_logger(__name__)
 
@@ -48,6 +49,13 @@ class DiscordLLMBot:
         
         # Conversation history (server_id -> channel_id -> messages)
         self.conversations: Dict[str, Dict[str, List[Message]]] = {}
+        
+        # Token-efficient conversation manager
+        self.conversation_manager = ConversationManager(
+            max_context_tokens=self.config_manager.get('llm.max_context_tokens', 32000),
+            reserve_tokens=self.config_manager.get('llm.reserve_tokens', 2048),
+            min_messages=self.config_manager.get('llm.min_messages', 2)
+        )
         
         # Register event handlers
         self._register_events()
@@ -231,19 +239,21 @@ class DiscordLLMBot:
                 # Add system prompt if this is the first message
                 if not conversation:
                     system_prompt = self.config_manager.get('prompts.system', '')
+                    
+                    # Add character limit instruction if enabled
+                    if server_config.get('enforce_char_limit', False):
+                        char_limit_instruction = "\n\nIMPORTANT: Keep your responses under 2000 characters to ensure they fit in a single Discord message. Be concise and direct."
+                        system_prompt = system_prompt + char_limit_instruction if system_prompt else char_limit_instruction.strip()
+                    
                     if system_prompt:
                         conversation.append(Message(role='system', content=system_prompt))
                 
-                # Add user message
-                conversation.append(Message(role='user', content=content))
-                
-                # Keep only last 20 messages to avoid context overflow
-                if len(conversation) > 20:
-                    # Keep system message and last 19 messages
-                    system_msg = conversation[0] if conversation[0].role == 'system' else None
-                    conversation = conversation[-19:]
-                    if system_msg:
-                        conversation.insert(0, system_msg)
+                # Add user message and prune conversation to fit token limits
+                conversation = self.conversation_manager.add_message(
+                    conversation, 
+                    Message(role='user', content=content),
+                    server_config.get('llm_model')
+                )
                 
                 # Get LLM provider
                 provider = self._get_llm_provider(
@@ -297,8 +307,12 @@ class DiscordLLMBot:
                 logger.debug(f"Response content length: {len(response.content) if response.content else 0}")
                 logger.debug(f"Response content: {response.content[:100] if response.content else 'None'}")
                 
-                # Add assistant response to conversation
-                conversation.append(Message(role='assistant', content=response.content))
+                # Add assistant response to conversation (with token management)
+                conversation = self.conversation_manager.add_message(
+                    conversation,
+                    Message(role='assistant', content=response.content),
+                    server_config.get('llm_model')
+                )
                 
                 # Send response
                 await self._send_response(message, response.content)
@@ -330,12 +344,16 @@ class DiscordLLMBot:
             logger.warning("Maximum tool call depth reached; returning last response")
             return response
 
-        # Add assistant message with tool calls
-        conversation.append(Message(
-            role='assistant',
-            content=response.content or "",
-            tool_calls=response.tool_calls
-        ))
+        # Add assistant message with tool calls (with token management)
+        conversation = self.conversation_manager.add_message(
+            conversation,
+            Message(
+                role='assistant',
+                content=response.content or "",
+                tool_calls=response.tool_calls
+            ),
+            server_config.get('llm_model')
+        )
 
         tool_results: List[tuple[str, str]] = []
 
@@ -368,12 +386,16 @@ class DiscordLLMBot:
                     logger.error(f"Tool execution error: {e}", exc_info=True)
                     tool_results.append((tool_name, result))
                 
-                # Add tool result to conversation
-                conversation.append(Message(
-                    role='tool',
-                    content=result,
-                    tool_call_id=tool_call_id
-                ))
+                # Add tool result to conversation (with token management)
+                conversation = self.conversation_manager.add_message(
+                    conversation,
+                    Message(
+                        role='tool',
+                        content=result,
+                        tool_call_id=tool_call_id
+                    ),
+                    server_config.get('llm_model')
+                )
             else:
                 result = f"Tool {tool_name} not found"
                 error_message = f"Tool {tool_name} not found"

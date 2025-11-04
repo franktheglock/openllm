@@ -55,6 +55,7 @@ class ConfigManager:
                     max_tokens INTEGER,
                     system_prompt TEXT,
                     enabled_tools TEXT,
+                    enforce_char_limit INTEGER DEFAULT 0,
                     config_json TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -102,6 +103,17 @@ class ConfigManager:
             """)
             
             conn.commit()
+            
+            # Migrate existing databases to add enforce_char_limit column if it doesn't exist
+            cursor.execute("PRAGMA table_info(server_config)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if 'enforce_char_limit' not in columns:
+                cursor.execute("""
+                    ALTER TABLE server_config 
+                    ADD COLUMN enforce_char_limit INTEGER DEFAULT 0
+                """)
+                conn.commit()
+                logger.info("Added enforce_char_limit column to server_config table")
         
         logger.info(f"Database initialized at {self.db_path}")
     

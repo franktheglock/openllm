@@ -700,6 +700,10 @@
                             <label for="llm-max-input">Max tokens</label>
                             <input id="llm-max-input" class="form-control" placeholder="4096" />
                         </div>
+                        <div class="toggle-switch">
+                            <input type="checkbox" id="enforce-char-limit-toggle">
+                            <label for="enforce-char-limit-toggle">Enforce 2000 character limit</label>
+                        </div>
                     </form>
                 </div>
                 <div class="card">
@@ -840,6 +844,7 @@
         document.getElementById('llm-model-input').value = state.currentConfig.llm_model || state.currentConfig.llm?.default_model || '';
         document.getElementById('llm-temperature-input').value = state.currentConfig.temperature ?? state.currentConfig.llm?.temperature ?? 0.7;
         document.getElementById('llm-max-input').value = state.currentConfig.max_tokens ?? state.currentConfig.llm?.max_tokens ?? 4096;
+        document.getElementById('enforce-char-limit-toggle').checked = state.currentConfig.enforce_char_limit ?? false;
     }
 
     function exitLlmEdit() {
@@ -944,7 +949,8 @@
                 temperature: parseFloat(document.getElementById('llm-temperature-input').value),
                 max_tokens: document.getElementById('llm-max-input').value.trim().toLowerCase() === 'auto'
                     ? 'auto'
-                    : parseInt(document.getElementById('llm-max-input').value, 10)
+                    : parseInt(document.getElementById('llm-max-input').value, 10),
+                enforce_char_limit: document.getElementById('enforce-char-limit-toggle').checked ? 1 : 0
             };
 
             const response = await fetch(`/api/servers/${state.currentServerId}/config`, {

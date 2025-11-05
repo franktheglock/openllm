@@ -85,12 +85,21 @@ class OpenAIProvider(BaseLLMProvider):
             }
             
             response = await self.client.chat.completions.create(**params)
-            
+
+            # Defensive checks: ensure response and choices exist
+            if not response:
+                logger.error("OpenAI returned empty response object")
+                raise RuntimeError("OpenAI returned empty response object")
+
+            if not hasattr(response, 'choices') or not response.choices:
+                logger.error(f"OpenAI response missing choices: {response}")
+                raise RuntimeError("OpenAI response missing choices")
+
             choice = response.choices[0]
             
             # Convert tool_calls to dict format if present
             tool_calls = None
-            if hasattr(choice.message, 'tool_calls') and choice.message.tool_calls:
+            if hasattr(choice, 'message') and hasattr(choice.message, 'tool_calls') and choice.message.tool_calls:
                 tool_calls = [
                     {
                         'id': tc.id,
@@ -103,20 +112,27 @@ class OpenAIProvider(BaseLLMProvider):
                     for tc in choice.message.tool_calls
                 ]
             
+            # Safe access to usage fields
+            usage = {
+                'prompt_tokens': getattr(getattr(response, 'usage', None), 'prompt_tokens', 0) or 0,
+                'completion_tokens': getattr(getattr(response, 'usage', None), 'completion_tokens', 0) or 0,
+                'total_tokens': getattr(getattr(response, 'usage', None), 'total_tokens', 0) or 0
+            }
+
             return LLMResponse(
-                content=choice.message.content or "",
-                model=response.model,
-                usage={
-                    'prompt_tokens': response.usage.prompt_tokens,
-                    'completion_tokens': response.usage.completion_tokens,
-                    'total_tokens': response.usage.total_tokens
-                },
+                content=(getattr(choice.message, 'content', None) or ""),
+                model=getattr(response, 'model', None),
+                usage=usage,
                 tool_calls=tool_calls,
-                finish_reason=choice.finish_reason
+                finish_reason=getattr(choice, 'finish_reason', None)
             )
         
         except Exception as e:
-            logger.error(f"OpenAI API error: {e}")
+            # Log more context for debugging
+            try:
+                logger.error(f"OpenAI API error: {e} - params: {params}")
+            except Exception:
+                logger.error(f"OpenAI API error: {e}")
             raise
     
     async def stream_complete(

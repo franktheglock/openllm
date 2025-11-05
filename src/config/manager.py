@@ -213,7 +213,8 @@ class ConfigManager:
                     'temperature': self.get('llm.temperature'),
                     'max_tokens': self.get('llm.max_tokens'),
                     'system_prompt': self.get('llm.system_prompt', ''),
-                    'enabled_tools': []  # Empty list - bot will populate on startup
+                    'enabled_tools': [],  # Empty list - bot will populate on startup
+                    'mention_users': False
                 }
     
     def set_server_config(self, server_id: str, config: Dict[str, Any]):

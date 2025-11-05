@@ -938,6 +938,10 @@
                             <span class="stat-label">System Prompt</span>
                             <span class="stat-value" id="llm-display-system-prompt" style="font-size:13px;line-height:1.5;color:var(--muted);">--</span>
                         </div>
+                        <div class="stat">
+                            <span class="stat-label">Mention users</span>
+                            <span class="stat-value" id="llm-display-mention-users" style="font-size:13px;line-height:1.5;color:var(--muted);">--</span>
+                        </div>
                     </div>
                     <form id="llm-form" class="hidden">
                         <div class="form-group">
@@ -978,6 +982,10 @@
                         <div class="toggle-switch">
                             <input type="checkbox" id="enforce-char-limit-toggle">
                             <label for="enforce-char-limit-toggle">Enforce 2000 character limit</label>
+                        </div>
+                        <div class="toggle-switch">
+                            <input type="checkbox" id="mention-users-toggle">
+                            <label for="mention-users-toggle">Mention (ping) users in bot responses</label>
                         </div>
                     </form>
                 </div>
@@ -1108,11 +1116,14 @@
         document.getElementById('llm-display-max').textContent = maxTokens;
         document.getElementById('llm-display-system-prompt').textContent = systemPrompt.length > 150 ? systemPrompt.substring(0, 150) + '...' : systemPrompt;
 
+        const mentionUsers = config.mention_users ?? config.llm?.mention_users ?? false;
+
         document.getElementById('status-provider').textContent = provider;
         document.getElementById('summary-provider').textContent = provider;
         document.getElementById('summary-model').textContent = model;
         document.getElementById('status-temperature').textContent = temperature;
         document.getElementById('status-max-tokens').textContent = maxTokens;
+        document.getElementById('llm-display-mention-users').textContent = mentionUsers ? 'Yes' : 'No';
     }
 
     function enterLlmEdit() {
@@ -1138,6 +1149,7 @@
         document.getElementById('llm-max-input').value = state.currentConfig.max_tokens ?? state.currentConfig.llm?.max_tokens ?? 4096;
         document.getElementById('llm-system-prompt-input').value = state.currentConfig.system_prompt || state.currentConfig.llm?.system_prompt || '';
         document.getElementById('enforce-char-limit-toggle').checked = state.currentConfig.enforce_char_limit ?? false;
+        document.getElementById('mention-users-toggle').checked = state.currentConfig.mention_users ?? state.currentConfig.llm?.mention_users ?? false;
     }
 
     function exitLlmEdit() {
@@ -1244,7 +1256,8 @@
                     ? 'auto'
                     : parseInt(document.getElementById('llm-max-input').value, 10),
                 system_prompt: document.getElementById('llm-system-prompt-input').value,
-                enforce_char_limit: document.getElementById('enforce-char-limit-toggle').checked ? 1 : 0
+                enforce_char_limit: document.getElementById('enforce-char-limit-toggle').checked ? 1 : 0,
+                mention_users: document.getElementById('mention-users-toggle').checked ? 1 : 0
             };
 
             const response = await fetch(`/api/servers/${state.currentServerId}/config`, {

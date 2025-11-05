@@ -528,13 +528,18 @@ class DiscordLLMBot:
         
         max_length = self.config_manager.get('bot.max_message_length', 2000)
         
+        # Determine whether to mention the author based on server config
+        server_id = str(message.guild.id) if message.guild else "DM"
+        server_config = self.config_manager.get_server_config(server_id)
+        mention_author_flag = bool(server_config.get('mention_users', False))
+
         if len(content) <= max_length:
-            await message.reply(content, mention_author=False)
+            await message.reply(content, mention_author=mention_author_flag)
         else:
             # Split into chunks
             chunks = [content[i:i+max_length] for i in range(0, len(content), max_length)]
             # Reply to first chunk, send rest normally
-            await message.reply(chunks[0], mention_author=False)
+            await message.reply(chunks[0], mention_author=mention_author_flag)
             for chunk in chunks[1:]:
                 await message.channel.send(chunk)
     

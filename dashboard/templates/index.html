@@ -1025,13 +1025,22 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="toggle-switch">
-                            <input type="checkbox" id="enforce-char-limit-toggle" data-tooltip="If enabled, responses will be kept under 2000 characters">
+                        <div class="toggle-switch" data-tooltip="If enabled, responses will be kept under 2000 characters">
+                            <input type="checkbox" id="enforce-char-limit-toggle">
                             <label for="enforce-char-limit-toggle">Enforce 2000 character limit</label>
                         </div>
-                        <div class="toggle-switch">
-                            <input type="checkbox" id="mention-users-toggle" data-tooltip="When enabled, the bot will ping the user in its reply">
+                        <div class="toggle-switch" data-tooltip="When enabled, the bot will ping the user in its reply">
+                            <input type="checkbox" id="mention-users-toggle">
                             <label for="mention-users-toggle">Mention (ping) users in bot responses</label>
+                        </div>
+                        <div class="form-group" style="margin-top:12px;">
+                            <label style="font-weight:600;display:block;margin-bottom:6px;">Save target</label>
+                            <div style="display:flex;gap:12px;align-items:center;">
+                                <label style="display:flex;align-items:center;gap:8px;" data-tooltip="Also save these changes to the global config.yaml (defaults)">
+                                    <input type="checkbox" id="llm-save-global">
+                                    <span style="font-size:13px;color:var(--muted);">Also update global defaults (config.yaml)</span>
+                                </label>
+                            </div>
                         </div>
                     </form>
                 </div>
@@ -1315,6 +1324,32 @@
             if (!response.ok) {
                 const err = await response.json();
                 throw new Error(err.error || 'Failed to save configuration');
+            }
+
+            // If requested, also update global defaults in config.yaml
+            const saveGlobal = document.getElementById('llm-save-global')?.checked;
+            if (saveGlobal) {
+                try {
+                    const globalPayload = {};
+                    if (payload.llm_provider) globalPayload['llm.default_provider'] = payload.llm_provider;
+                    if (payload.llm_model) globalPayload['llm.default_model'] = payload.llm_model;
+                    if (payload.temperature !== undefined) globalPayload['llm.temperature'] = payload.temperature;
+                    if (payload.max_tokens !== undefined) globalPayload['llm.max_tokens'] = payload.max_tokens;
+                    if (payload.system_prompt !== undefined) globalPayload['llm.system_prompt'] = payload.system_prompt;
+
+                    const gResp = await fetch('/api/config', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(globalPayload)
+                    });
+
+                    if (!gResp.ok) {
+                        const ge = await gResp.json();
+                        console.warn('Failed to update global config:', ge);
+                    }
+                } catch (e) {
+                    console.error('Global config update failed:', e);
+                }
             }
 
             await loadConfig();

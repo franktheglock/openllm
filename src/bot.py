@@ -509,6 +509,45 @@ class DiscordLLMBot:
                 ))
                 conn.commit()
                 logger.info(f"Created server config for {server_id} with tools: {tool_names}")
+
+    def refresh_server_config(self, server_id: str):
+        """
+        Refresh in-memory structures for a server when its configuration changes.
+
+        This will update or insert the system prompt in existing conversations so
+        changes to the system prompt take effect immediately without restarting.
+        """
+        try:
+            server_config = self.config_manager.get_server_config(server_id)
+
+            # If we don't have any conversations yet for this server, nothing to do
+            if server_id not in self.conversations:
+                return
+
+            # Build the system prompt, including any char limit instruction
+            system_prompt = server_config.get('system_prompt') or self.config_manager.get('llm.system_prompt', '')
+            if server_config.get('enforce_char_limit', False):
+                char_limit_instruction = "\n\nIMPORTANT: Keep your responses under 2000 characters to ensure they fit in a single Discord message. Be concise and direct."
+                system_prompt = (system_prompt + char_limit_instruction) if system_prompt else char_limit_instruction.strip()
+
+            # Update each channel conversation for the server
+            for channel_id, convo in self.conversations.get(server_id, {}).items():
+                if not convo:
+                    # If empty, insert a system prompt so next message starts with it
+                    if system_prompt:
+                        convo.insert(0, Message(role='system', content=system_prompt))
+                else:
+                    # If first message is system, replace its content
+                    if convo[0].role == 'system':
+                        convo[0].content = system_prompt
+                    else:
+                        # Prepend a system message
+                        if system_prompt:
+                            convo.insert(0, Message(role='system', content=system_prompt))
+
+            logger.info(f"Refreshed in-memory config for server {server_id}")
+        except Exception as e:
+            logger.error(f"Failed to refresh server config for {server_id}: {e}", exc_info=True)
     
     def _get_llm_provider(self, provider_name: str, server_id: str) -> BaseLLMProvider:
         """Get or create LLM provider instance."""

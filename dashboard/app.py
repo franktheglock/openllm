@@ -104,6 +104,12 @@ def create_app(config_manager: Optional[ConfigManager] = None, bot = None):
         else:
             config = request.json
             app.config_manager.set_server_config(server_id, config)
+            # If the bot is running, ask it to refresh in-memory structures for this server
+            try:
+                if app.bot and hasattr(app.bot, 'refresh_server_config'):
+                    app.bot.refresh_server_config(server_id)
+            except Exception as e:
+                logger.error(f"Error refreshing bot server config for {server_id}: {e}")
             return jsonify({'success': True})
     
     @app.route('/api/usage/stats')

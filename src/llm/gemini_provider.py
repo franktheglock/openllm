@@ -54,6 +54,14 @@ class GeminiProvider(BaseLLMProvider):
                     'role': 'model',
                     'parts': [msg.content]
                 })
+            elif msg.role == 'tool':
+                # Represent tool outputs as tool messages so Gemini sees the results
+                # and can incorporate them into the next reply. Prefix content if not already prefixed.
+                content = msg.content or ''
+                chat_history.append({
+                    'role': 'tool',
+                    'parts': [content]
+                })
         
         return system_instruction, chat_history
     
@@ -76,10 +84,27 @@ class GeminiProvider(BaseLLMProvider):
                 'max_output_tokens': max_tokens,
             }
             
+            # If tools are provided, inject a brief machine-readable description into the system instruction
+            # so Gemini knows about available tools and how to request them. We keep this short to avoid
+            # overwhelming the model but include an explicit JSON-call format hint which we parse below.
+            system_instr = system_instruction or ""
+            if tools:
+                try:
+                    import json
+                    tools_desc = json.dumps([{ 'name': t.get('name') or t.get('id') or t.get('function', {}).get('name'), 'description': t.get('description', ''), 'parameters': t.get('parameters', {}) } for t in tools])
+                    system_instr += (
+                        "\n\nAvailable tools (JSON): " + tools_desc +
+                        "\nIf you want to call a tool, output ONLY a single JSON object containing a 'function' key with 'name' and 'arguments' fields, for example:\n"
+                        "{\"function\": {\"name\": \"web_search\", \"arguments\": {\"query\": \"latest AI news\"}}}\n"
+                    )
+                except Exception:
+                    # fall back silently if tools can't be serialized
+                    pass
+
             model_instance = genai.GenerativeModel(
                 model_name=model,
                 generation_config=generation_config,
-                system_instruction=system_instruction if system_instruction else None
+                system_instruction=system_instr if system_instr else None
             )
             
             # Start chat or single message
@@ -101,19 +126,105 @@ class GeminiProvider(BaseLLMProvider):
                 prompt_tokens = response.usage_metadata.prompt_token_count
                 completion_tokens = response.usage_metadata.candidates_token_count
                 total_tokens = response.usage_metadata.total_token_count
-            except:
+            except Exception:
                 prompt_tokens = 0
                 completion_tokens = 0
                 total_tokens = 0
-            
+
+            # Normalize content
+            content = getattr(response, 'text', None)
+            if not content:
+                # Try common alternative locations
+                candidates = getattr(response, 'candidates', None)
+                if candidates and len(candidates) > 0:
+                    # candidate may have 'content' or 'text'
+                    c = candidates[0]
+                    content = getattr(c, 'content', None) or getattr(c, 'text', None) or ''
+                else:
+                    content = ''
+
+            # Try to extract tool_calls from several possible response shapes.
+            tool_calls = None
+
+            # 1) Native field on response (if present)
+            if hasattr(response, 'tool_calls') and getattr(response, 'tool_calls'):
+                tool_calls = []
+                for tc in response.tool_calls:
+                    try:
+                        fn = getattr(tc, 'function', None)
+                        if fn is not None:
+                            tool_calls.append({
+                                'id': getattr(tc, 'id', None),
+                                'type': getattr(tc, 'type', None),
+                                'function': {
+                                    'name': getattr(fn, 'name', None),
+                                    'arguments': getattr(fn, 'arguments', None)
+                                }
+                            })
+                        else:
+                            # Fallback dict-like
+                            tool_calls.append(dict(tc))
+                    except Exception:
+                        continue
+
+            # 2) Candidates may include tool_calls
+            if not tool_calls:
+                candidates = getattr(response, 'candidates', None)
+                if candidates:
+                    for c in candidates:
+                        tc_attr = getattr(c, 'tool_calls', None) or (getattr(c, 'message', None) and getattr(c.message, 'tool_calls', None))
+                        if tc_attr:
+                            tool_calls = []
+                            for tc in tc_attr:
+                                try:
+                                    fn = getattr(tc, 'function', None)
+                                    if fn is not None:
+                                        tool_calls.append({
+                                            'id': getattr(tc, 'id', None),
+                                            'type': getattr(tc, 'type', None),
+                                            'function': {
+                                                'name': getattr(fn, 'name', None),
+                                                'arguments': getattr(fn, 'arguments', None)
+                                            }
+                                        })
+                                    else:
+                                        tool_calls.append(dict(tc))
+                                except Exception:
+                                    continue
+                            break
+
+            # 3) As a last resort try to parse JSON embedded in the text (models sometimes emit a JSON tool call)
+            if not tool_calls and content:
+                import json
+                try:
+                    # Find first JSON object in the text
+                    start = content.find('{')
+                    end = content.rfind('}')
+                    if start != -1 and end != -1 and end > start:
+                        maybe_json = content[start:end+1]
+                        parsed = json.loads(maybe_json)
+                        # Heuristics: look for either 'function' or 'tool' keys
+                        if isinstance(parsed, dict) and ('function' in parsed or 'tool' in parsed or 'name' in parsed):
+                            # Normalize into tool_calls structure
+                            fn_obj = parsed.get('function') or {'name': parsed.get('tool') or parsed.get('name'), 'arguments': parsed.get('arguments') or parsed.get('args')}
+                            tool_calls = [{
+                                'id': parsed.get('id'),
+                                'type': parsed.get('type'),
+                                'function': fn_obj
+                            }]
+                except Exception:
+                    # ignore JSON parse errors
+                    pass
+
             return LLMResponse(
-                content=response.text,
+                content=content,
                 model=model,
                 usage={
                     'prompt_tokens': prompt_tokens,
                     'completion_tokens': completion_tokens,
                     'total_tokens': total_tokens
                 },
+                tool_calls=tool_calls,
                 finish_reason='stop'
             )
         

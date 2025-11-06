@@ -466,12 +466,34 @@ class DiscordLLMBot:
             tool_args_str = tool_call['function']['arguments']
             tool_call_id = tool_call['id']
             
-            # Parse arguments
+            # Parse arguments robustly: providers may supply a dict already or a JSON/string
             import json
+            tool_args = {}
             try:
-                tool_args = json.loads(tool_args_str)
-            except:
-                tool_args = eval(tool_args_str)  # Fallback to eval
+                if isinstance(tool_args_str, dict):
+                    tool_args = tool_args_str
+                elif isinstance(tool_args_str, (bytes, bytearray)):
+                    try:
+                        tool_args = json.loads(tool_args_str.decode('utf-8'))
+                    except Exception:
+                        tool_args = {}
+                elif isinstance(tool_args_str, str):
+                    # Try JSON first (most common), then as Python literal
+                    try:
+                        tool_args = json.loads(tool_args_str)
+                    except Exception:
+                        try:
+                            # Safer eval: only allow literal structures
+                            from ast import literal_eval
+                            tool_args = literal_eval(tool_args_str)
+                        except Exception:
+                            tool_args = {}
+                else:
+                    # Unknown type, leave empty
+                    tool_args = {}
+            except Exception as e:
+                logger.error(f"Failed to parse tool arguments (type={type(tool_args_str)}): {e}")
+                tool_args = {}
             
             result = None
             success = False
@@ -488,12 +510,14 @@ class DiscordLLMBot:
                     logger.error(f"Tool execution error: {e}", exc_info=True)
                     tool_results.append((tool_name, result))
                 
-                # Add tool result to conversation (with token management)
+                                    # Add tool result to conversation (with token management)
+                # Prefix result with tool name so LLMs reliably see which tool produced it
+                tool_content = f"[{tool_name}] {result}"
                 conversation = self.conversation_manager.add_message(
                     conversation,
                     Message(
                         role='tool',
-                        content=result,
+                        content=tool_content,
                         tool_call_id=tool_call_id
                     ),
                     server_config.get('llm_model')

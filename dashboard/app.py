@@ -561,15 +561,30 @@ def create_app(config_manager: Optional[ConfigManager] = None, bot = None):
                                 try:
                                     tool_name = tool_call['function']['name']
                                     tool_args_str = tool_call['function'].get('arguments')
-                                    # Parse arguments
+                                    # Robust argument parsing: accept dict, bytes, or JSON/text
                                     import json as _json
+                                    tool_args = {}
                                     try:
-                                        tool_args = _json.loads(tool_args_str) if isinstance(tool_args_str, str) else tool_args_str
-                                    except Exception:
-                                        try:
-                                            tool_args = eval(tool_args_str)
-                                        except Exception:
+                                        if isinstance(tool_args_str, dict):
+                                            tool_args = tool_args_str
+                                        elif isinstance(tool_args_str, (bytes, bytearray)):
+                                            try:
+                                                tool_args = _json.loads(tool_args_str.decode('utf-8'))
+                                            except Exception:
+                                                tool_args = {}
+                                        elif isinstance(tool_args_str, str):
+                                            try:
+                                                tool_args = _json.loads(tool_args_str)
+                                            except Exception:
+                                                try:
+                                                    from ast import literal_eval as _literal_eval
+                                                    tool_args = _literal_eval(tool_args_str)
+                                                except Exception:
+                                                    tool_args = {}
+                                        else:
                                             tool_args = {}
+                                    except Exception:
+                                        tool_args = {}
 
                                     result = None
                                     if app.bot and tool_name in app.bot.tools:
@@ -598,7 +613,8 @@ def create_app(config_manager: Optional[ConfigManager] = None, bot = None):
                                         result = f"Tool {tool_name} not found"
 
                                     # Append tool result as a tool-role message for the model
-                                    messages_for_model.append(Message(role='tool', content=str(result)))
+                                    # Prefix with tool name so providers pick up the source
+                                    messages_for_model.append(Message(role='tool', content=f"[{tool_name}] {result}"))
                                 except Exception as e:
                                     # Continue to next tool call on error
                                     logger.error(f"Error executing tool call in generate-prompt: {e}")
@@ -630,13 +646,28 @@ def create_app(config_manager: Optional[ConfigManager] = None, bot = None):
                                     tool_name = tool_call['function']['name']
                                     tool_args_str = tool_call['function'].get('arguments')
                                     import json as _json
+                                    tool_args = {}
                                     try:
-                                        tool_args = _json.loads(tool_args_str) if isinstance(tool_args_str, str) else tool_args_str
-                                    except Exception:
-                                        try:
-                                            tool_args = eval(tool_args_str)
-                                        except Exception:
+                                        if isinstance(tool_args_str, dict):
+                                            tool_args = tool_args_str
+                                        elif isinstance(tool_args_str, (bytes, bytearray)):
+                                            try:
+                                                tool_args = _json.loads(tool_args_str.decode('utf-8'))
+                                            except Exception:
+                                                tool_args = {}
+                                        elif isinstance(tool_args_str, str):
+                                            try:
+                                                tool_args = _json.loads(tool_args_str)
+                                            except Exception:
+                                                try:
+                                                    from ast import literal_eval as _literal_eval
+                                                    tool_args = _literal_eval(tool_args_str)
+                                                except Exception:
+                                                    tool_args = {}
+                                        else:
                                             tool_args = {}
+                                    except Exception:
+                                        tool_args = {}
 
                                     result = None
                                     if app.bot and tool_name in app.bot.tools:

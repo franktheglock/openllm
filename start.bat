@@ -81,7 +81,7 @@ echo ========================================
 echo.
 REM Launch a new cmd window, activate the virtual env there, and run the bot so the current
 REM window remains for logs and doesn't need to keep the venv active.
-start "" cmd /k "call venv\Scripts\activate && python main.py"
+start "" /min cmd /k "call venv\Scripts\activate && python main.py"
 
 REM Give the server a moment to start, then ask whether to open the dashboard in the default browser.
 echo Waiting for dashboard to become available...

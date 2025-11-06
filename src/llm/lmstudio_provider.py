@@ -77,6 +77,7 @@ class LMStudioProvider(BaseLLMProvider):
                 
                 return LLMResponse(
                     content=content,
+                    model=model,
                     finish_reason=finish_reason,
                     usage={
                         'prompt_tokens': usage.get('prompt_tokens', 0),
@@ -84,6 +85,26 @@ class LMStudioProvider(BaseLLMProvider):
                         'total_tokens': usage.get('total_tokens', 0)
                     }
                 )
+
+    async def stream_complete(
+        self,
+        messages: List[Message],
+        model: str = "local-model",
+        temperature: float = 0.7,
+        max_tokens: int = 2048,
+        tools: Optional[List[Dict]] = None,
+        **kwargs
+    ):
+        """
+        Streaming wrapper for the LM Studio provider.
+
+        LM Studio may not support streaming in the same way as remote APIs. To
+        satisfy the BaseLLMProvider interface we call the regular `complete`
+        method and yield the full response as a single chunk.
+        """
+        resp = await self.complete(messages, model=model, temperature=temperature, max_tokens=max_tokens, tools=tools, **kwargs)
+        # Yield the full content as a single chunk to conform to the AsyncIterator[str]
+        yield resp.content
     
     def get_available_models(self) -> List[str]:
         """Get list of available models."""

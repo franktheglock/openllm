@@ -30,6 +30,7 @@ OpenLLM — a powerful Discord assistant platform powered by Large Language Mode
 - 🔌 **Plugin Marketplace**: Browse and install community extensions
 - 🪟 **Windows Support**: One-click setup with `setup.bat`
 - 📱 **Mobile Friendly**: Access dashboard from your phone with responsive design
+ - 🐧 **Unix Quick Start**: `start.sh` (Linux) and `start_macos.sh` (macOS) available for one-step setup/start
 
 ## 🚀 Quick Start
 
@@ -101,6 +102,22 @@ OpenLLM — a powerful Discord assistant platform powered by Large Language Mode
    ```bash
    python main.py
    ```
+
+Alternatively, the repo includes quick-start scripts to automate these steps:
+
+- Linux (all-in-one):
+   ```bash
+   chmod +x ./start.sh
+   ./start.sh
+   ```
+
+- macOS (Terminal.app):
+   ```bash
+   chmod +x ./start_macos.sh
+   ./start_macos.sh
+   ```
+
+These scripts will create/activate the virtual environment, install dependencies if needed, run the setup wizard (if configuration is missing), start the bot in a new terminal window, and open the dashboard in your browser.
 
 ## 📖 Configuration
 

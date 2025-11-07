@@ -1,17 +1,21 @@
 @echo off
 echo Setting up OpenLLM environment...
 
-REM Create virtual environment if it doesn't exist
-if not exist venv (
+REM Check if virtual environment exists and is valid
+if exist venv\Scripts\activate.bat (
+    echo Virtual environment already exists.
+) else (
     echo Creating virtual environment...
+    if exist venv (
+        echo Removing incomplete virtual environment...
+        rmdir /s /q venv
+    )
     python -m venv venv
     if errorlevel 1 (
         echo Failed to create virtual environment. Make sure Python is installed.
         pause
         exit /b 1
     )
-) else (
-    echo Virtual environment already exists.
 )
 
 REM Activate virtual environment
@@ -19,6 +23,7 @@ echo Activating virtual environment...
 call venv\Scripts\activate.bat
 if errorlevel 1 (
     echo Failed to activate virtual environment.
+    echo Please ensure the virtual environment was created correctly.
     pause
     exit /b 1
 )

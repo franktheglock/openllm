@@ -4,8 +4,14 @@ echo Discord LLM Bot - Quick Start
 echo ========================================
 echo.
 
-REM Check if virtual environment exists
-if not exist "venv\" (
+REM Check if virtual environment exists and is valid
+if exist "venv\Scripts\activate.bat" (
+    echo Virtual environment found.
+) else (
+    if exist "venv\" (
+        echo Removing incomplete virtual environment...
+        rmdir /s /q "venv"
+    )
     echo Creating virtual environment...
     python -m venv venv
     if errorlevel 1 (
@@ -21,6 +27,8 @@ echo Activating virtual environment...
 call venv\Scripts\activate
 if errorlevel 1 (
     echo Error: Failed to activate virtual environment
+    echo The virtual environment may be corrupted.
+    echo Try deleting the 'venv' folder and running this script again.
     pause
     exit /b 1
 )

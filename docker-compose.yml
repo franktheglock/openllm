@@ -3,7 +3,7 @@ version: '3.8'
 services:
   discord-bot:
     build: .
-    container_name: discord-llm-bot
+    container_name: OpenLLM
     restart: unless-stopped
     
     # Environment variables - FILL THESE IN OR USE .env FILE
@@ -46,7 +46,7 @@ services:
       start_period: 60s
     
     # Network mode (use host if you need to access services on host machine)
-    # network_mode: "host"  # Uncomment for host network mode
+    network_mode: "host" 
     
     # Optional: GPU support for local models
     # deploy:

@@ -30,7 +30,13 @@ logger = setup_logger(__name__)
 ROOT_DIR = Path(__file__).resolve().parent.parent
 TEMPLATE_DIR = ROOT_DIR / "dashboard" / "templates"
 DEFAULT_ENV_EXAMPLE = ROOT_DIR / ".env.example"
+# Default env file location inside project root (installed binary dir)
 DEFAULT_ENV = ROOT_DIR / ".env"
+
+# Fallback per-user directory for writable runtime configuration. Use LOCALAPPDATA
+# when available, otherwise fall back to the user's home directory.
+USER_CONFIG_DIR = Path(os.getenv("LOCALAPPDATA") or Path.home()) / "OpenLLM"
+
 
 PROVIDER_MODELS: Dict[str, list[str]] = {
     "gemini": ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"],
@@ -75,12 +81,29 @@ class SetupOptions:
 
 def _ensure_env_file() -> Path:
     """Ensure a .env file exists by copying from example if available."""
-    if not DEFAULT_ENV.exists():
-        if DEFAULT_ENV_EXAMPLE.exists():
-            DEFAULT_ENV.write_text(DEFAULT_ENV_EXAMPLE.read_text(encoding="utf-8"), encoding="utf-8")
-        else:
-            DEFAULT_ENV.touch()
-    return DEFAULT_ENV
+    # Try to create/use the env file inside the installation/root directory first.
+    try:
+        if not DEFAULT_ENV.exists():
+            if DEFAULT_ENV_EXAMPLE.exists():
+                DEFAULT_ENV.write_text(DEFAULT_ENV_EXAMPLE.read_text(encoding="utf-8"), encoding="utf-8")
+            else:
+                DEFAULT_ENV.touch()
+        return DEFAULT_ENV
+    except PermissionError:
+        # Likely installed under Program Files - fall back to per-user config directory
+        try:
+            USER_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+            user_env = USER_CONFIG_DIR / ".env"
+            if not user_env.exists():
+                if DEFAULT_ENV_EXAMPLE.exists():
+                    # Copy example into per-user config dir
+                    user_env.write_text(DEFAULT_ENV_EXAMPLE.read_text(encoding="utf-8"), encoding="utf-8")
+                else:
+                    user_env.touch()
+            return user_env
+        except Exception:
+            # As a last resort, re-raise the original PermissionError to preserve behavior
+            raise
 
 
 def _set_env_value(env_path: Path, key: str, value: Any) -> None:

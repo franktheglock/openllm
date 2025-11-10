@@ -42,7 +42,21 @@ OpenLLM — a powerful Discord assistant platform powered by Large Language Mode
 
 ### Installation
 
-#### Windows (Recommended)
+#### Windows Installer (Easiest)
+
+**New! Download the all-in-one Windows installer (no Python required):**
+
+1. Download `OpenLLM-Setup-Standalone.exe` from releases (run as administrator) 
+2. Run the installer (includes Python 3.11.9 - no prerequisites!)
+3. Launch OpenLLM from Start Menu or Desktop
+
+**Alternative:** If you already have Python installed, download `OpenLLM-Setup.exe` instead (smaller download)
+
+The installer includes everything you need to run OpenLLM - no separate Python installation required for the standalone version!
+
+**To build the installer yourself**, see [BUILD_INSTALLER.md](BUILD_INSTALLER.md).
+
+#### Windows (Script-based)
 
 1. **Download/Clone the repository**
    ```bash

@@ -438,10 +438,15 @@
             transition:all 0.2s ease;
             margin-bottom:12px;
             background:var(--panel-hover);
+            cursor:pointer;
         }
         .server-item:hover {
             border-color:var(--accent-soft);
             transform:translateY(-2px);
+        }
+        .server-item.selected {
+            border-color:var(--accent);
+            background:rgba(99,102,241,0.15);
         }
         .server-name {
             font-weight:600;
@@ -450,6 +455,16 @@
         .server-info {
             font-size:13px;
             color:var(--muted);
+        }
+        .server-instruction {
+            padding:0 0 12px 0;
+            font-size:13px;
+            color:var(--muted);
+        }
+        .selected-server-name {
+            font-size:13px;
+            color:var(--muted);
+            font-weight:400;
         }
         .toggle-switch {
             display:flex;
@@ -956,7 +971,7 @@
             <div class="grid">
                 <div class="card" id="llm-config-card">
                     <div class="card-header">
-                        <h3>LLM Configuration</h3>
+                        <h3>LLM Configuration <span id="selected-server-name" class="selected-server-name"></span></h3>
                             <div class="button-group">
                             <button class="btn btn-secondary" id="llm-edit-btn" data-tooltip="Edit LLM settings for this server">Edit</button>
                             <button class="btn btn-primary hidden" id="llm-save-btn" data-tooltip="Save LLM configuration">Save</button>
@@ -1059,6 +1074,9 @@
                         <h3>Server Connections</h3>
                         <button class="btn btn-secondary" id="refresh-servers" data-tooltip="Reload connected servers list">Refresh</button>
                     </div>
+                    <div class="server-instruction">
+                        Click a server to view and edit its configuration
+                    </div>
                     <div class="server-list" id="server-list">Loading server data...</div>
                 </div>
             </div>
@@ -1149,6 +1167,8 @@
     const state = {
         currentConfig: {},
         currentServerId: null,
+        currentServerName: null,
+        servers: [],
     availableProviders: [],
         plugins: [],
         tools: [],
@@ -1266,25 +1286,72 @@
             const response = await fetch('/api/servers');
             if (!response.ok) throw new Error('Failed to fetch servers');
             const servers = await response.json();
+            
+            // Store servers in state
+            state.servers = servers;
 
             const list = document.getElementById('server-list');
             if (!servers.length) {
                 list.textContent = 'No servers connected.';
                 state.currentServerId = null;
+                state.currentServerName = null;
+                updateServerNameDisplay();
             } else {
-                state.currentServerId = servers[0].id;
+                // Keep the current selection if it still exists, otherwise default to first
+                if (!state.currentServerId || !servers.find(s => s.id === state.currentServerId)) {
+                    state.currentServerId = servers[0].id;
+                    state.currentServerName = servers[0].name;
+                }
+                
                 list.innerHTML = servers.map(server => `
-                    <div class="server-item">
+                    <div class="server-item ${server.id === state.currentServerId ? 'selected' : ''}" data-server-id="${server.id}">
                         <div class="server-name">${server.name}</div>
                         <div class="server-info">${server.member_count} members - ${server.llm_provider || 'N/A'} (${server.llm_model || 'N/A'})</div>
                     </div>
                 `).join('');
+                
+                // Add click handlers to server items
+                list.querySelectorAll('.server-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        const serverId = item.getAttribute('data-server-id');
+                        selectServer(serverId);
+                    });
+                });
+                
+                updateServerNameDisplay();
             }
 
             await loadConfig();
         } catch (error) {
             console.error('Server fetch failed:', error);
             document.getElementById('server-list').textContent = 'Unable to load server data.';
+        }
+    }
+
+    async function selectServer(serverId) {
+        if (state.currentServerId === serverId) return; // Already selected
+        
+        state.currentServerId = serverId;
+        
+        // Update server name
+        const server = state.servers.find(s => s.id === serverId);
+        state.currentServerName = server ? server.name : null;
+        
+        // Update visual selection
+        document.querySelectorAll('.server-item').forEach(item => {
+            item.classList.toggle('selected', item.getAttribute('data-server-id') === serverId);
+        });
+        
+        updateServerNameDisplay();
+        
+        // Load configuration for the selected server
+        await loadConfig();
+    }
+    
+    function updateServerNameDisplay() {
+        const nameElement = document.getElementById('selected-server-name');
+        if (nameElement) {
+            nameElement.textContent = state.currentServerName ? `(${state.currentServerName})` : '';
         }
     }
 
